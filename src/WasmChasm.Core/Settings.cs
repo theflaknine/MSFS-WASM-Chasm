@@ -3,7 +3,10 @@ using System.Text.Json.Serialization;
 
 namespace WasmChasm.Core;
 
-/// <summary>How the app looks and sounds. What it does to files is the same in both.</summary>
+/// <summary>
+/// How the app looks and sounds. What it does to files is the same in both. On screen these are called
+/// FUN (Retro) and SERIOUS (Plain); the old names stay here because they are what settings.json holds.
+/// </summary>
 public enum AppMode
 {
     Retro,
@@ -15,6 +18,10 @@ public sealed class AppSettings
 {
     public string? PreferredStoreId { get; set; }
     public AppMode Mode { get; set; } = AppMode.Retro;
+
+    /// <summary>False until the user answers the first-run question, so closing the app doesn't count as an answer.</summary>
+    public bool ModeChosen { get; set; }
+
     public bool CrtEffects { get; set; } = true;
     public bool Sound { get; set; }
     public DisposalMode DisposalMode { get; set; } = DisposalMode.RecycleBin;

@@ -55,8 +55,8 @@
                                             <TextBlock x:Name="InstallText" Text="INSTALL: ----" FontFamily="{DynamicResource TerminalFont}" FontSize="{DynamicResource TextSize}" Foreground="{DynamicResource Phosphor}" />
                                         </Button>
                                         <Button x:Name="ModeButton" Style="{StaticResource KeyButton}" Tag="F4" Click="OnLegendClick" Margin="24,0,0,0"
-                                                AutomationProperties.Name="Display mode. Press F4 to switch between Retro and Plain.">
-                                            <TextBlock x:Name="ModeText" Text="MODE: RETRO  [F4]" FontFamily="{DynamicResource TerminalFont}" FontSize="{DynamicResource TextSize}" Foreground="{DynamicResource Phosphor}" />
+                                                AutomationProperties.Name="Display mode. Press F4 to switch between Fun and Serious.">
+                                            <TextBlock x:Name="ModeText" Text="MODE: FUN  [F4]" FontFamily="{DynamicResource TerminalFont}" FontSize="{DynamicResource TextSize}" Foreground="{DynamicResource Phosphor}" />
                                         </Button>
                                     </StackPanel>
                                     <TextBlock x:Name="ClockText" Grid.Column="2" Style="{StaticResource Term}" Text="SESSION 00:00:00"
@@ -290,17 +290,19 @@
                                     </DrawingBrush>
                                 </Rectangle.Fill>
                             </Rectangle>
-                            <Rectangle x:Name="RollBand" Height="120" VerticalAlignment="Top" IsHitTestVisible="False">
+                            <!-- The rectangle stays still and only its gradient moves. Moving the rectangle past the screen
+                                 edge changes the area the CRT shader works on, which distorts the whole screen. -->
+                            <Rectangle x:Name="RollBand" IsHitTestVisible="False">
                                 <Rectangle.Fill>
-                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,0.1695">
+                                        <LinearGradientBrush.RelativeTransform>
+                                            <TranslateTransform x:Name="RollTransform" Y="-0.1695" />
+                                        </LinearGradientBrush.RelativeTransform>
                                         <GradientStop Color="#00FFB000" Offset="0" />
                                         <GradientStop Color="#0DFFB000" Offset="0.5" />
                                         <GradientStop Color="#00FFB000" Offset="1" />
                                     </LinearGradientBrush>
                                 </Rectangle.Fill>
-                                <Rectangle.RenderTransform>
-                                    <TranslateTransform x:Name="RollTransform" Y="-120" />
-                                </Rectangle.RenderTransform>
                             </Rectangle>
                             <Rectangle x:Name="VignetteOverlay" IsHitTestVisible="False">
                                 <Rectangle.Fill>

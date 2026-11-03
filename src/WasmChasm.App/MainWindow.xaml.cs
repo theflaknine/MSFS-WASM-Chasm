@@ -42,10 +42,12 @@ public partial class MainWindow : Window
     private Func<Key, bool>? _sheetKeys;
     private Task _animationTail = Task.CompletedTask;
     private int _pendingAnimations;
+    private bool _rendered;
 
     public MainWindow()
     {
         InitializeComponent();
+        ContentRendered += (_, _) => _rendered = true;
         _config = LoadConfig();
         _settings = AppSettings.Load();
         ApplyMode();
@@ -86,10 +88,69 @@ public partial class MainWindow : Window
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         ApplyCrt();
-        if (!IsPlain) PreparePowerOn();
-        if (!IsPlain) PrepareSplash();
         _log.Write($"APP START v{typeof(MainWindow).Assembly.GetName().Version}");
+        if (_settings.ModeChosen) StartUp();
+        else ShowModeChoice();
+    }
+
+    /// <summary>The theatre, if this mode has one, then the scan. The theatre never holds up the scan.</summary>
+    private void StartUp()
+    {
+        if (!IsPlain)
+        {
+            PreparePowerOn();
+            PrepareSplash();
+        }
+
         DetectAndChoose();
+    }
+
+    /// <summary>Runs once the window has been drawn: straight away if it already has been.</summary>
+    private void WhenRendered(Action action)
+    {
+        if (_rendered)
+        {
+            Dispatcher.BeginInvoke(action, DispatcherPriority.Loaded);
+            return;
+        }
+
+        void Once(object? sender, EventArgs e)
+        {
+            ContentRendered -= Once;
+            action();
+        }
+
+        ContentRendered += Once;
+    }
+
+    /// <summary>The first-run question. It comes before everything else, so Serious users never see the theatre.</summary>
+    private void ShowModeChoice()
+    {
+        ShowSheet("CHOOSE A MODE", k =>
+        {
+            AppMode? choice = k switch
+            {
+                Key.D1 or Key.NumPad1 => AppMode.Retro,
+                Key.D2 or Key.NumPad2 => AppMode.Plain,
+                _ => null,
+            };
+            if (choice is null) return false;
+
+            _settings.ModeChosen = true;
+            SetMode(choice.Value);
+            CloseSheet();
+            StartUp();
+            return true;
+        });
+
+        Line("1  FUN");
+        Line("   AMBER SCREEN, ANIMATIONS AND OPTIONAL SOUND.");
+        Gap();
+        Line("2  SERIOUS");
+        Line("   PLAIN SCREEN. NO EFFECTS, ANIMATIONS OR SOUND.");
+        Gap();
+        Line("BOTH DO THE SAME THING TO YOUR FILES. F4 SWITCHES MODE AT ANY TIME (EXCEPT NOW).");
+        Prompt("PRESS 1 OR 2.");
     }
 
     // ───────────────────────────── Install detection ─────────────────────────────
@@ -303,12 +364,16 @@ public partial class MainWindow : Window
     {
         if (_splashUp)
         {
-            DismissSplash();
+            // A key still held from the mode choice shouldn't skip the splash it just started.
+            if (!e.IsRepeat) DismissSplash();
             e.Handled = true;
             return;
         }
 
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        // Alt+F4 must always reach Windows, or the window can't be closed from a full-screen page.
+        if (key == Key.F4 && (Keyboard.Modifiers & ModifierKeys.Alt) != 0) return;
+
         if (HandleKey(key, Keyboard.Modifiers)) e.Handled = true;
         else if (Sheet.Visibility == Visibility.Visible && Keyboard.FocusedElement is not TextBox) e.Handled = true;
     }
@@ -479,7 +544,7 @@ public partial class MainWindow : Window
                      ("ENTER", "PURGE MARKED AIRCRAFT (YOU CONFIRM FIRST)"),
                      ("F2", "SWITCH INSTALL (STEAM / STORE)"),
                      ("F3", "SETTINGS: DISPOSAL METHOD, BACKUPS, SCOPE, DRY RUN, CRT EFFECTS, SOUND"),
-                     ("F4", "SWITCH BETWEEN RETRO AND PLAIN MODE (NO EFFECTS, SAME FUNCTIONS)"),
+                     ("F4", "SWITCH BETWEEN FUN AND SERIOUS MODE (NO EFFECTS, SAME FUNCTIONS)"),
                      ("F5", "RESCAN"),
                  })
         {
@@ -600,8 +665,8 @@ public partial class MainWindow : Window
         };
         var items = new[]
         {
-            $"CRT EFFECTS ........ {(_settings.CrtEffects ? "ON" : "OFF")}{(IsPlain ? "  (NOT USED IN PLAIN MODE)" : SystemParameters.HighContrast ? "  (OFF WHILE HIGH CONTRAST IS ACTIVE)" : "")}",
-            $"SOUND .............. {(_settings.Sound ? "ON" : "OFF")}{(IsPlain ? "  (NOT USED IN PLAIN MODE)" : "")}",
+            $"CRT EFFECTS ........ {(_settings.CrtEffects ? "ON" : "OFF")}{(IsPlain ? "  (NOT USED IN SERIOUS MODE)" : SystemParameters.HighContrast ? "  (OFF WHILE HIGH CONTRAST IS ACTIVE)" : "")}",
+            $"SOUND .............. {(_settings.Sound ? "ON" : "OFF")}{(IsPlain ? "  (NOT USED IN SERIOUS MODE)" : "")}",
             $"DISPOSAL METHOD .... {mode}",
             $"BACKUP FOLDER ...... {(_settings.BackupFolder ?? "NOT SET")}",
             $"SCOPE .............. {ScopeText.Name(_settings.Scope)}",
@@ -615,7 +680,7 @@ public partial class MainWindow : Window
         string note = _settingsCursor switch
         {
             0 => "SCANLINES, GLOW, CURVATURE AND THE ROLL BAND. TURN OFF FOR ACCESSIBILITY OR LOW-END GRAPHICS.",
-            1 => "GENTLE HUM, GRADUAL POWER-UP, SOFT BLIP ON ROW CHANGE, RISING RATCHET ON SELECT, RETRO CRUMBLE IN THE CHASM, SOFT CHIME WHEN DONE.",
+            1 => "GENTLE HUM, GRADUAL POWER-UP, SOFT BLIP ON ROW CHANGE, RISING RATCHET ON SELECT, CRUMBLE IN THE CHASM, SOFT CHIME WHEN DONE.",
             2 => "RECYCLE BIN IS THE DEFAULT. A ZIP BACKUP IS WRITTEN TO THE BACKUP FOLDER FIRST IF CHOSEN.",
             3 => "WHERE ZIP BACKUPS ARE WRITTEN. ENTER TO CHOOSE.",
             4 => "COMPILED CACHE ONLY IS RECOMMENDED AND KEEPS SETTINGS. WORK FOLDER AND WHOLE PACKAGE ERASE SETTINGS AND ADD-ON DATA, WHICH MAY INCLUDE LICENCE FILES.",
@@ -1095,9 +1160,11 @@ public partial class MainWindow : Window
     private Geometry? _retroClip;
     private Brush? _retroWindow;
 
-    private void ToggleMode()
+    private void ToggleMode() => SetMode(IsPlain ? AppMode.Retro : AppMode.Plain);
+
+    private void SetMode(AppMode mode)
     {
-        _settings.Mode = IsPlain ? AppMode.Retro : AppMode.Plain;
+        _settings.Mode = mode;
         _settings.Save();
         ApplyMode();
         ApplyCrt();
@@ -1137,13 +1204,13 @@ public partial class MainWindow : Window
         ChasmGapColumn.Width = new GridLength(plain ? 0 : 16);
         ChasmColumn.Width = plain ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
 
-        ModeText.Text = plain ? "MODE: PLAIN  [F4]" : "MODE: RETRO  [F4]";
+        ModeText.Text = plain ? "MODE: SERIOUS  [F4]" : "MODE: FUN  [F4]";
         _sound.Enabled = _settings.Sound && !plain;
     }
 
     // ───────────────────────────── Splash ─────────────────────────────
 
-    private const double SplashSeconds = 2.0;
+    private const double SplashSeconds = 2.6;
     private bool _splashUp;
     private DispatcherTimer? _splashTimer;
 
@@ -1162,16 +1229,15 @@ public partial class MainWindow : Window
         MainContent.Opacity = 0;
         Sheet.Opacity = 0;
 
-        void Start(object? sender, EventArgs e)
+        void Start()
         {
-            ContentRendered -= Start;
             if (!_splashUp) return;
             _splashTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(SplashSeconds) };
             _splashTimer.Tick += (_, _) => DismissSplash();
             _splashTimer.Start();
         }
 
-        ContentRendered += Start;
+        WhenRendered(Start);
     }
 
     /// <summary>Solid at the top of the letters, then cut by stripes that widen towards the bottom.</summary>
@@ -1243,9 +1309,8 @@ public partial class MainWindow : Window
         PowerBeam.Visibility = Visibility.Visible;
         PowerLamp.Opacity = 0;
 
-        void Start(object? sender, EventArgs e)
+        void Start()
         {
-            ContentRendered -= Start;
             _sound.PlayPowerOn();
 
             static DoubleAnimationUsingKeyFrames Keys(params (double Seconds, double Value)[] frames)
@@ -1277,7 +1342,7 @@ public partial class MainWindow : Window
             PowerBeam.BeginAnimation(OpacityProperty, fade);
         }
 
-        ContentRendered += Start;
+        WhenRendered(Start);
     }
 
     private void ApplyCrt()
@@ -1299,7 +1364,7 @@ public partial class MainWindow : Window
                 Opacity = 0.55,
             };
             RollTransform.BeginAnimation(TranslateTransform.YProperty,
-                new DoubleAnimation(-120, 708, TimeSpan.FromSeconds(9)) { RepeatBehavior = RepeatBehavior.Forever });
+                new DoubleAnimation(-0.1695, 1, TimeSpan.FromSeconds(9)) { RepeatBehavior = RepeatBehavior.Forever });
             Chasm.AnimateTitle(true);
         }
         else

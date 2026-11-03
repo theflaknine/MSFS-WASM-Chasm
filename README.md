@@ -74,22 +74,22 @@ that file (a copy placed beside `WasmChasm.exe` overrides the built-in one).
 | F1 | Help |
 | F2 | Switch install (Steam / Store) |
 | F3 | Settings |
-| F4 | Switch between Retro and Plain mode |
+| F4 | Switch between Fun and Serious mode |
 | F5 | Rescan |
 
-**Retro and Plain:** Retro is the amber terminal. Plain (F4) is the same app with the theatre removed: plain grey, one standard font at one size, and no bezel, chasm, session clock, splash, animations or sound. It only changes how the app looks and sounds, and the choice is remembered.
+**Fun and Serious:** the app asks which you want the first time it runs. Fun is the amber terminal. Serious is the same app with the theatre removed: plain grey, one standard font at one size, and no bezel, chasm, session clock, splash, animations or sound. It only changes how the app looks and sounds. The choice is remembered, and F4 switches at any time.
 
-**Settings (F3):** CRT effects on/off, sound on/off (Retro only, and off by default; a gentle hum, a power-up at launch, a soft blip as you move, a rising ratchet as you mark aircraft, a retro crumble and a chime), disposal method (Recycle Bin —
+**Settings (F3):** CRT effects on/off, sound on/off (Fun only, and off by default; a gentle hum, a power-up at launch, a soft blip as you move, a rising ratchet as you mark aircraft, a crumble and a chime), disposal method (Recycle Bin —
 default; zip backup then Recycle Bin; permanent delete), backup folder, scope (compiled cache only — default;
 work folder only; or whole package folder) and dry run.
 
-**Dry run** shows what would be removed and touches nothing. In Retro it plays the same fall into the chasm,
+**Dry run** shows what would be removed and touches nothing. In Fun it plays the same fall into the chasm,
 and the rows return afterwards.
 
 More than five aircraft at once requires typing `Y` to confirm.
 
-**After a purge:** Plain always shows a results page. Retro skips it after a clean purge and shows a one-line
-summary instead, because each row falling into the chasm has already shown its folder is done. Retro still
+**After a purge:** Serious always shows a results page. Fun skips it after a clean purge and shows a one-line
+summary instead, because each row falling into the chasm has already shown its folder is done. Fun still
 shows the results page after a dry run, if animations are off, if a link was removed, if a backup was written,
 and whenever anything was skipped or failed.
 

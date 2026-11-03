@@ -310,6 +310,32 @@ public class ModeSettingTests
         Assert.Equal(AppMode.Retro, s.Mode);
         Assert.True(s.Sound);
     }
+
+    [Fact]
+    public void The_first_run_question_is_asked_until_it_is_answered()
+    {
+        using var f = new Fixture();
+        var path = Path.Combine(f.Base, "settings.json");
+        Assert.False(AppSettings.Load(path).ModeChosen);
+
+        new AppSettings().Save(path);
+        Assert.False(AppSettings.Load(path).ModeChosen);
+
+        new AppSettings { Mode = AppMode.Plain, ModeChosen = true }.Save(path);
+        var answered = AppSettings.Load(path);
+        Assert.True(answered.ModeChosen);
+        Assert.Equal(AppMode.Plain, answered.Mode);
+    }
+
+    [Fact]
+    public void Older_settings_without_the_answer_still_ask_the_question()
+    {
+        using var f = new Fixture();
+        var path = Path.Combine(f.Base, "settings.json");
+        File.WriteAllText(path, "{ \"Mode\": \"Plain\" }");
+
+        Assert.False(AppSettings.Load(path).ModeChosen);
+    }
 }
 
 public class StrayInstallTests
