@@ -14,8 +14,8 @@ WASM Chasm is a free, open-source Windows utility for **Microsoft Flight Simulat
 Microsoft Store / PC Game Pass). Pick one or more aircraft and remove their WASM data in a few keystrokes,
 instead of hunting through AppData by package ID.
 
-It looks like an anonymous late-1970s office terminal: amber phosphor, scanlines, and a chasm on the right
-that the aircraft you purge fall into — one row at a time, as each folder actually completes.
+It has two modes: **Fun**, with a retro look and some theatre, and **Serious**, which is plain. Both do exactly the
+same thing to your files. See [Using it](#using-it).
 
 No installer. No telemetry. No network access. No admin rights.
 
@@ -78,7 +78,7 @@ that file (a copy placed beside `WasmChasm.exe` overrides the built-in one).
 | F4 | Switch between Fun and Serious mode |
 | F5 | Rescan |
 
-**Fun and Serious:** the app asks which you want the first time it runs. Fun is the amber terminal. Serious is the same app with the theatre removed: plain grey, one standard font at one size, and no bezel, chasm, session clock, splash, animations or sound. It only changes how the app looks and sounds. The choice is remembered, and F4 switches at any time.
+**Fun and Serious:** the app asks which you want the first time it runs. Fun is the retro look, with animations and optional sound. Serious is the same app without any of that: one plain font at one size. It only changes how the app looks and sounds, never what happens to your files. The choice is remembered, and F4 switches at any time.
 
 **Settings (F3):** CRT effects on/off, sound on/off (Fun only, and off by default; a gentle hum, a power-up at launch, a soft blip as you move, a rising ratchet as you mark aircraft, a crumble and a chime), disposal method (Recycle Bin —
 default; zip backup then Recycle Bin; permanent delete), backup folder (paste or type its path), scope (compiled cache only — default;
