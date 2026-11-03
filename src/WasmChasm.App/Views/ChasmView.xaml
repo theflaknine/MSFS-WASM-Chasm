@@ -1,7 +1,7 @@
 <UserControl x:Class="WasmChasm.App.Views.ChasmView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             AutomationProperties.Name="The chasm. Depth gauge shows data queued for consignment.">
+             AutomationProperties.Name="The chasm. Depth gauge shows the data marked to clear.">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -22,7 +22,7 @@
         </Grid>
         <StackPanel Grid.Row="2" HorizontalAlignment="Center">
             <TextBlock Style="{StaticResource TermDim}" Text="DEPTH GAUGE" HorizontalAlignment="Center" />
-            <TextBlock x:Name="DepthText" Style="{StaticResource Term}" Text="0 MB QUEUED" HorizontalAlignment="Center"
+            <TextBlock x:Name="DepthText" Style="{StaticResource Term}" Text="0 MB MARKED" HorizontalAlignment="Center"
                        AutomationProperties.LiveSetting="Polite" />
         </StackPanel>
     </Grid>

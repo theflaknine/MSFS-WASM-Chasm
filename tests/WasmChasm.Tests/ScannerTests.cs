@@ -55,9 +55,9 @@ public class ScannerTests
         var pmdg = Assert.Single(groups, g => g.PackageId == "pmdg-aircraft-77w");
         Assert.Equal("PMDG 777-300ER", pmdg.Title);
         Assert.Equal(2, pmdg.Entries.Count);
-        var orphan = Assert.Single(groups, g => g.PackageId == "gone-aircraft");
-        Assert.True(orphan.IsOrphan);
-        Assert.Equal("gone-aircraft", orphan.DisplayName);
+        var untitled = Assert.Single(groups, g => g.PackageId == "gone-aircraft");
+        Assert.Null(untitled.Title);
+        Assert.Equal("gone-aircraft", untitled.DisplayName);
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public class ScannerTests
         Directory.CreateDirectory(pkg);
         var target = f.Outside("linked-target");
         File.WriteAllBytes(Path.Combine(target, "big.bin"), new byte[4096]);
-        Directory.CreateSymbolicLink(Path.Combine(pkg, "work"), target);
+        Fixture.CreateDirectoryLink(Path.Combine(pkg, "work"), target);
 
         var e = Assert.Single(new WasmScanner(f.Config).Scan(f.WasmRoot));
         Assert.True(e.HasWorkFolder);
@@ -122,12 +122,12 @@ public class ManifestTests
     }
 
     [Fact]
-    public void No_usercfg_means_every_entry_is_orphaned()
+    public void No_usercfg_means_every_entry_shows_its_package_id()
     {
         using var f = new Fixture();
         f.AddWasm("MSFS2024", "x");
         var groups = Catalog.Load(f.Install with { UserCfgPath = null }, f.Config);
-        Assert.True(Assert.Single(groups).IsOrphan);
+        Assert.Equal("x", Assert.Single(groups).DisplayName);
     }
 }
 

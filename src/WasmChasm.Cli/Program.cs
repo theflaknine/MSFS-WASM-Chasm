@@ -3,7 +3,7 @@ using WasmChasm.Core;
 
 namespace WasmChasm.Cli;
 
-/// <summary>Thin console wrapper over Core: <c>scan</c> and <c>consign</c> (dry run by default for support use).</summary>
+/// <summary>Thin console wrapper over Core: <c>scan</c> and <c>clear</c> (dry run by default for support use).</summary>
 public static class Program
 {
     private const string Usage = """
@@ -11,13 +11,14 @@ public static class Program
 
         USAGE
           wasmchasm scan    [--store steam|store] [--root <WASM folder>] [--json]
-          wasmchasm consign <package-id>... [--store steam|store] [--root <WASM folder>]
-                            [--dry-run] [--scope work|package] [--include-unknown]
-                            [--mode recycle|zip|permanent] [--backup <folder>] [--yes]
+          wasmchasm clear <package-id>... [--store steam|store] [--root <WASM folder>]
+                          [--dry-run] [--scope compiled|work|package] [--include-unknown]
+                          [--mode recycle|zip|permanent] [--backup <folder>] [--yes]
           wasmchasm stores
           wasmchasm --help
 
-        consign without --yes is always a dry run. Nothing outside the WASM root is ever touched.
+        clear without --yes is always a dry run. The default scope is compiled: settings in the work
+        folder are kept. Nothing outside the WASM root is ever touched.
         Not affiliated with Microsoft or Asobo Studio.
         """;
 
@@ -48,7 +49,7 @@ public static class Program
         {
             "stores" => Stores(config, stdout),
             "scan" => Scan(config, opts, stdout),
-            "consign" => Consign(config, opts, stdout),
+            "clear" => Clear(config, opts, stdout),
             _ => throw new CliException($"Unknown command '{args[0]}'. Try --help."),
         };
     }
@@ -58,9 +59,12 @@ public static class Program
         foreach (var locator in InstallDetection.CreateLocators(config))
         {
             var found = locator.Locate();
-            o.WriteLine(found is null
-                ? $"{locator.StoreId,-6} not found"
-                : $"{locator.StoreId,-6} {found.WasmRoot}  (UserCfg.opt: {found.UserCfgPath ?? "not found"})");
+            var stray = (locator as ConfiguredInstallLocator)?.FindStrayRoot();
+            o.WriteLine(found is not null
+                ? $"{locator.StoreId,-6} {found.WasmRoot}  (UserCfg.opt: {found.UserCfgPath ?? "not found"})"
+                : stray is not null
+                    ? $"{locator.StoreId,-6} not an install: no UserCfg.opt, but a WASM folder exists at {stray}. Use --root to inspect it."
+                    : $"{locator.StoreId,-6} not found");
         }
 
         return 0;
@@ -94,8 +98,6 @@ public static class Program
     {
         var install = ResolveInstall(config, opts);
         var groups = Catalog.Load(install, config);
-        var packagesPath = UserCfgParser.ReadInstalledPackagesPath(install.UserCfgPath);
-        bool titlesKnown = packagesPath is not null && Directory.Exists(packagesPath);
 
         if (opts.Json)
         {
@@ -108,9 +110,9 @@ public static class Program
                 {
                     packageId = g.PackageId,
                     title = g.Title,
-                    orphan = titlesKnown && g.IsOrphan,
                     sizeBytes = g.SizeBytes,
                     workSizeBytes = g.WorkSizeBytes,
+                    compiledSizeBytes = g.CompiledSizeBytes,
                     lastModifiedUtc = g.LastModifiedUtc,
                     folders = g.Entries.Select(e => new
                     {
@@ -121,6 +123,7 @@ public static class Program
                         workIsLink = e.WorkIsReparsePoint,
                         sizeBytes = e.SizeBytes,
                         workSizeBytes = e.WorkSizeBytes,
+                        compiledSizeBytes = e.CompiledSizeBytes,
                         lastModifiedUtc = e.LastModifiedUtc,
                     }),
                 }),
@@ -132,15 +135,14 @@ public static class Program
         o.WriteLine($"INSTALL  {install.Label}  {install.WasmRoot}");
         o.WriteLine($"USERCFG  {install.UserCfgPath ?? "(not found - titles unavailable)"}");
         o.WriteLine();
-        o.WriteLine($"{"TITLE",-40} {"PACKAGE",-36} {"SIZE",10} {"WORK",10}  MODIFIED");
+        o.WriteLine($"{"TITLE",-40} {"PACKAGE",-36} {"SIZE",10} {"CACHE",10} {"WORK",10}  MODIFIED");
         foreach (var g in groups)
         {
-            var title = g.IsOrphan ? (titlesKnown ? "[ORPHAN] " : "") + g.PackageId : g.DisplayName;
-            o.WriteLine($"{Trunc(title, 40),-40} {Trunc(g.PackageId, 36),-36} {ByteFormat.Format(g.SizeBytes),10} {ByteFormat.Format(g.WorkSizeBytes),10}  {g.LastModifiedUtc.ToLocalTime():yyyy-MM-dd}");
+            o.WriteLine($"{Trunc(g.DisplayName, 40),-40} {Trunc(g.PackageId, 36),-36} {ByteFormat.Format(g.SizeBytes),10} {ByteFormat.Format(g.CompiledSizeBytes),10} {ByteFormat.Format(g.WorkSizeBytes),10}  {g.LastModifiedUtc.ToLocalTime():yyyy-MM-dd}");
             foreach (var e in g.Entries)
             {
                 var flags = (e.IsKnownSimVersion ? "" : " [UNRECOGNISED FOLDER]") + (e.WorkIsReparsePoint ? " [LINK]" : "") + (e.HasWorkFolder ? "" : " [NO WORK FOLDER]");
-                o.WriteLine($"  └ {e.SimVersionFolder,-36}{"",40} {ByteFormat.Format(e.SizeBytes),10} {ByteFormat.Format(e.WorkSizeBytes),10}{flags}");
+                o.WriteLine($"  └ {e.SimVersionFolder,-36}{"",40} {ByteFormat.Format(e.SizeBytes),10} {ByteFormat.Format(e.CompiledSizeBytes),10} {ByteFormat.Format(e.WorkSizeBytes),10}{flags}");
             }
         }
 
@@ -149,7 +151,7 @@ public static class Program
         return 0;
     }
 
-    private static int Consign(LocationsConfig config, CliOptions opts, TextWriter o)
+    private static int Clear(LocationsConfig config, CliOptions opts, TextWriter o)
     {
         if (opts.Packages.Count == 0) throw new CliException("Name at least one package ID.");
         var install = ResolveInstall(config, opts);
@@ -170,7 +172,7 @@ public static class Program
 
         var targets = ConsignmentService.BuildTargets(selected, options);
         var pre = service.Preflight(targets, opts.Mode);
-        foreach (var r in pre.Refused) o.WriteLine($"SKIPPED   {r.Target.Path}  {r.Reason}");
+        foreach (var r in pre.Refused) o.WriteLine($"SKIPPED   {r.Target.Label}  {r.Reason}");
 
         if (pre.Problem == PreflightProblem.SimRunning || pre.Problem == PreflightProblem.NothingToConsign)
         {
@@ -185,27 +187,24 @@ public static class Program
             return 4;
         }
 
-        o.WriteLine(dryRun ? "DRY RUN - NOTHING WILL BE TOUCHED." : "CONSIGNING.");
-        o.WriteLine("WARNING: clearing a work folder erases this aircraft's settings, saved states and any navdata or");
-        o.WriteLine("account IDs (for example SimBrief alias, Hoppie ID) stored there.");
+        o.WriteLine(dryRun ? "DRY RUN - NOTHING WILL BE TOUCHED." : "CLEARING.");
+        o.WriteLine($"SCOPE: {ScopeText.Name(opts.Scope)}");
+        o.WriteLine("WARNING: " + ScopeText.Warning(opts.Scope));
 
         var mode = opts.Mode == DisposalMode.ZipThenRecycle && !OperatingSystem.IsWindows() ? DisposalMode.ZipThenPermanent : opts.Mode;
         var strategy = dryRun ? new PermanentStrategy() : DisposalStrategies.Create(mode, recycle, opts.Backup);
         var results = service.Execute(pre.Targets, strategy, options);
 
         foreach (var r in results)
-            o.WriteLine($"{OutcomeLabel(r.Outcome),-12} {r.Target.Path}  [{ByteFormat.Format(r.Target.SizeBytes)}]  {r.Reason}{(r.BackupPath is null ? "" : "  backup: " + r.BackupPath)}");
+            o.WriteLine($"{OutcomeLabel(r.Outcome),-12} {r.Target.Label}  [{ByteFormat.Format(r.Target.SizeBytes)}]  {r.Reason}{(r.BackupPath is null ? "" : "  backup: " + r.BackupPath)}");
 
-        var removed = results.Where(r => r.Outcome is ConsignOutcome.Removed or ConsignOutcome.WouldRemove).ToList();
-        o.WriteLine(dryRun
-            ? $"DRY RUN COMPLETE. {removed.Count} RECORDS WOULD BE RELEASED. {ByteFormat.Megabytes(removed.Sum(r => r.Target.SizeBytes))} WOULD BE RECLAIMED."
-            : $"CONSIGNMENT COMPLETE. {removed.Count} RECORDS RELEASED. {ByteFormat.Megabytes(removed.Sum(r => r.Target.SizeBytes))} RECLAIMED.");
+        o.WriteLine(ScopeText.Summary(results, dryRun));
         return results.Any(r => r.Outcome == ConsignOutcome.Failed) ? 5 : 0;
     }
 
     private static string OutcomeLabel(ConsignOutcome o) => o switch
     {
-        ConsignOutcome.WouldRemove => "WOULD-REMOVE",
+        ConsignOutcome.WouldRemove => "WOULD-CLEAR",
         _ => o.ToString().ToUpperInvariant(),
     };
 
@@ -225,7 +224,7 @@ public sealed class CliOptions
     public bool DryRun { get; private set; }
     public bool Yes { get; private set; }
     public bool IncludeUnknown { get; private set; }
-    public DeletionScope Scope { get; private set; } = DeletionScope.WorkFolder;
+    public DeletionScope Scope { get; private set; } = DeletionScope.CompiledCache;
     public DisposalMode Mode { get; private set; } = DisposalMode.RecycleBin;
     public string? Backup { get; private set; }
     public List<string> Packages { get; } = new();
@@ -248,6 +247,7 @@ public sealed class CliOptions
                 case "--scope":
                     o.Scope = Next() switch
                     {
+                        "compiled" => DeletionScope.CompiledCache,
                         "work" => DeletionScope.WorkFolder,
                         "package" => DeletionScope.PackageFolder,
                         var s => throw new CliException($"Unknown scope '{s}'."),

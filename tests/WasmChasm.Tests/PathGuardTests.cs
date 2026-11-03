@@ -98,7 +98,7 @@ public class PathGuardTests
         var outside = f.Outside("victim");
         Directory.CreateDirectory(Path.Combine(outside, "work"));
         Directory.CreateDirectory(Path.Combine(f.WasmRoot, "MSFS2024"));
-        Directory.CreateSymbolicLink(Path.Combine(f.WasmRoot, "MSFS2024", "evil"), outside);
+        Fixture.CreateDirectoryLink(Path.Combine(f.WasmRoot, "MSFS2024", "evil"), outside);
 
         var guard = new PathGuard(new[] { f.WasmRoot });
         Assert.False(guard.Check(Path.Combine(f.WasmRoot, "MSFS2024", "evil", "work")).Allowed);

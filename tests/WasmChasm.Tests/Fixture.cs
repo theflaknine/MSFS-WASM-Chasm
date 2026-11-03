@@ -35,6 +35,40 @@ public sealed class Fixture : IDisposable
         return pkg;
     }
 
+    /// <summary>The file set the sim was observed generating for one compiled module.</summary>
+    public static readonly string[] CompiledNames =
+    {
+        "m78edaad72d8f5958_0.cache", "m78edaad72d8f5958_0.dll", "m78edaad72d8f5958_0.lib",
+        "m78edaad72d8f5958_0.natvis", "m78edaad72d8f5958_0.obj", "m78edaad72d8f5958_0.pdb",
+    };
+
+    /// <summary>Adds one module's compiled files beside the work folder, 10 bytes each.</summary>
+    public void AddCompiled(string packagePath)
+    {
+        foreach (var name in CompiledNames) File.WriteAllBytes(Path.Combine(packagePath, name), new byte[10]);
+    }
+
+    /// <summary>A directory symlink where allowed, else a junction, which Windows lets any user create.</summary>
+    public static void CreateDirectoryLink(string link, string target)
+    {
+        try
+        {
+            Directory.CreateSymbolicLink(link, target);
+        }
+        catch (IOException) when (OperatingSystem.IsWindows())
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{target}\"")
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+            };
+            using var p = System.Diagnostics.Process.Start(psi)!;
+            p.WaitForExit();
+            Assert.True(Directory.Exists(link), "Could not create a junction for the test.");
+        }
+    }
+
     public void AddManifest(string relativeDir, string package, string title)
     {
         var dir = Path.Combine(Packages, relativeDir, package);
@@ -73,6 +107,7 @@ public sealed class FakeRecycleBin : IRecycleBin
     {
         if (Unavailable is not null) throw new RecycleBinUnavailableException(Unavailable);
         Recycled.Add(path);
-        SafeDelete.DeleteTree(path);
+        if (File.Exists(path)) File.Delete(path);
+        else SafeDelete.DeleteTree(path);
     }
 }

@@ -34,7 +34,6 @@ public partial class MainWindow : Window
 
     private IReadOnlyList<InstallLocation> _detected = Array.Empty<InstallLocation>();
     private InstallLocation? _install;
-    private bool _titlesAvailable;
     private SortKey _sortKey = SortKey.Name;
     private bool _sortDescending;
     private bool _scanning;
@@ -161,27 +160,21 @@ public partial class MainWindow : Window
                 return (g, packages is not null && Directory.Exists(packages));
             });
 
-            _titlesAvailable = titles;
             _rows.Clear();
-            foreach (var g in groups)
-            {
-                var row = new AircraftRow(g, _settings.Scope);
-                if (!titles) row = new AircraftRow(new AircraftGroup(g.PackageId, g.PackageId, g.Entries), _settings.Scope);
-                _rows.Add(row);
-            }
+            foreach (var g in groups) _rows.Add(new AircraftRow(g, _settings.Scope));
 
             ApplySort();
             UpdateTotals();
-            SizeHeading.Text = _settings.Scope == DeletionScope.WorkFolder ? "WORK" : "SIZE";
+            SizeHeading.Text = ScopeText.ColumnHeading(_settings.Scope);
 
-            var status = $"{groups.Count} RECORDS ON FILE. {ByteFormat.Format(groups.Sum(x => x.ScopedSize(_settings.Scope)))} IN SCOPE.";
-            if (!titles) status += " TITLES UNAVAILABLE (USERCFG.OPT NOT FOUND); SHOWING PACKAGE IDS.";
+            var status = $"{groups.Count} AIRCRAFT FOUND. {ByteFormat.Format(groups.Sum(x => x.ScopedSize(_settings.Scope)))} CAN BE CLEARED.";
+            if (!titles) status += " NAMES UNAVAILABLE (USERCFG.OPT NOT FOUND).";
             if (groups.Count > 0 && !groups.SelectMany(x => x.Entries).Any(en => en.IsKnownSimVersion))
                 status += " NO MSFS2024 OR MSFS2020 FOLDER FOUND.";
             if (_settings.DryRun) status += " DRY RUN IS ON.";
             StatusText.Text = status;
 
-            EmptyText.Text = "NO RECORDS ON FILE.\nNO WASM DATA WAS FOUND UNDER\n" + install.WasmRoot;
+            EmptyText.Text = "NO AIRCRAFT FOUND.\nNO WASM DATA WAS FOUND UNDER\n" + install.WasmRoot;
             EmptyText.Visibility = groups.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             _log.Write($"SCAN {groups.Count} aircraft");
         }
@@ -254,7 +247,7 @@ public partial class MainWindow : Window
         var marked = _rows.Where(r => r.IsMarked && !r.IsDetached).ToList();
         long bytes = marked.Sum(r => r.ScopedBytes);
         int hidden = marked.Count(r => !_view.Filter(r));
-        TotalText.Text = $"{marked.Count} MARKED. {ByteFormat.Megabytes(bytes)} QUEUED." +
+        TotalText.Text = $"{marked.Count} MARKED. {ByteFormat.Megabytes(bytes)}." +
                          (hidden > 0 ? $" ({hidden} HIDDEN BY FILTER)" : "");
         Chasm.QueuedBytes = bytes;
     }
@@ -379,10 +372,6 @@ public partial class MainWindow : Window
             case Key.D when ctrl && !inFilter:
                 SetMarks(_ => true, false);
                 return true;
-            case Key.O when ctrl && !inFilter:
-                if (_titlesAvailable) SetMarks(r => r.IsOrphan && _view.Filter(r), true);
-                else StatusText.Text = "ORPHANS CANNOT BE IDENTIFIED: TITLES UNAVAILABLE.";
-                return true;
         }
 
         return false;
@@ -463,11 +452,10 @@ public partial class MainWindow : Window
                      ("UP / DOWN", "MOVE THE CURSOR"),
                      ("SPACE", "MARK OR UNMARK THE AIRCRAFT UNDER THE CURSOR (CLICK ALSO WORKS)"),
                      ("CTRL+A", "MARK EVERY AIRCRAFT SHOWN"),
-                     ("CTRL+O", "MARK EVERY ORPHANED AIRCRAFT (NO LONGER INSTALLED)"),
-                     ("CTRL+D / ESC", "CLEAR ALL MARKS"),
-                     ("/ OR CTRL+F", "FILTER BY NAME OR PACKAGE ID"),
+                     ("CTRL+D / ESC", "UNMARK ALL"),
+                     ("/ OR CTRL+F", "FILTER BY NAME"),
                      ("F6 / SHIFT+F6", "CHANGE SORT: NAME, SIZE, DATE / REVERSE"),
-                     ("ENTER", "CONSIGN MARKED AIRCRAFT (A CONFIRMATION FOLLOWS)"),
+                     ("ENTER", "CLEAR MARKED AIRCRAFT (YOU CONFIRM FIRST)"),
                      ("F2", "SWITCH INSTALL (STEAM / STORE) OR BROWSE FOR A WASM FOLDER"),
                      ("F3", "SETTINGS: DISPOSAL METHOD, BACKUPS, SCOPE, DRY RUN, CRT EFFECTS, SOUND"),
                      ("F5", "RESCAN"),
@@ -477,7 +465,7 @@ public partial class MainWindow : Window
         }
 
         Gap();
-        Line("BY DEFAULT ONLY EACH PACKAGE'S WORK FOLDER IS REMOVED, AND IT GOES TO THE RECYCLE BIN.");
+        Line("BY DEFAULT ONLY THE COMPILED FILES THE SIM GENERATED ARE REMOVED, AND THEY GO TO THE RECYCLE BIN. SETTINGS ARE KEPT.");
         Line("NOTHING OUTSIDE THE WASM FOLDER IS EVER TOUCHED. NO ADMIN RIGHTS. NO NETWORK ACCESS.");
         Line("A LOG OF EVERY SESSION IS KEPT IN " + SessionLog.DefaultDirectory.ToUpperInvariant(), dim: true);
         Gap();
@@ -499,7 +487,7 @@ public partial class MainWindow : Window
             return false;
         });
 
-        Line("NO MICROSOFT FLIGHT SIMULATOR 2024 WASM FOLDER WAS FOUND IN EITHER EXPECTED LOCATION:");
+        Line("NO MICROSOFT FLIGHT SIMULATOR 2024 INSTALL WAS FOUND. A WASM FOLDER AND USERCFG.OPT WERE EXPECTED TOGETHER AT ONE OF:");
         Gap();
         foreach (var store in _config.Stores)
         {
@@ -606,7 +594,7 @@ public partial class MainWindow : Window
                     ApplyCrt();
                     _sound.Enabled = _settings.Sound;
                     foreach (var r in _rows) r.Scope = _settings.Scope;
-                    SizeHeading.Text = _settings.Scope == DeletionScope.WorkFolder ? "WORK" : "SIZE";
+                    SizeHeading.Text = ScopeText.ColumnHeading(_settings.Scope);
                     UpdateTotals();
                     CloseSheet();
                     _ = RescanAsync();
@@ -634,7 +622,7 @@ public partial class MainWindow : Window
             $"SOUND .............. {(_settings.Sound ? "ON" : "OFF")}",
             $"DISPOSAL METHOD .... {mode}",
             $"BACKUP FOLDER ...... {(_settings.BackupFolder ?? "NOT SET")}",
-            $"SCOPE .............. {(_settings.Scope == DeletionScope.WorkFolder ? "WORK FOLDER ONLY" : "WHOLE PACKAGE FOLDER")}",
+            $"SCOPE .............. {ScopeText.Name(_settings.Scope)}",
             $"DRY RUN ............ {(_settings.DryRun ? "ON (NOTHING IS TOUCHED)" : "OFF")}",
         };
 
@@ -645,10 +633,10 @@ public partial class MainWindow : Window
         string note = _settingsCursor switch
         {
             0 => "SCANLINES, GLOW, CURVATURE AND THE ROLL BAND. TURN OFF FOR ACCESSIBILITY OR LOW-END GRAPHICS.",
-            1 => "RELAY CLICK ON SELECT, LOW HUM DURING CONSIGNMENT, ONE BEEP ON COMPLETION.",
+            1 => "RELAY CLICK ON SELECT, LOW HUM WHILE CLEARING, ONE BEEP ON COMPLETION.",
             2 => "RECYCLE BIN IS THE DEFAULT. A ZIP BACKUP IS WRITTEN TO THE BACKUP FOLDER FIRST IF CHOSEN.",
             3 => "WHERE ZIP BACKUPS ARE WRITTEN. ENTER TO CHOOSE.",
-            4 => "WORK FOLDER ONLY IS RECOMMENDED. WHOLE PACKAGE ALSO REMOVES COMPILED MODULE DATA, WHICH THE SIM MAY HAVE TO REBUILD.",
+            4 => "COMPILED CACHE ONLY IS RECOMMENDED AND KEEPS SETTINGS. WORK FOLDER AND WHOLE PACKAGE ERASE SETTINGS AND ADD-ON DATA, WHICH MAY INCLUDE LICENCE FILES.",
             _ => "SHOWS WHAT WOULD BE REMOVED AND TOUCHES NOTHING.",
         };
         Line(note, dim: true);
@@ -673,7 +661,14 @@ public partial class MainWindow : Window
                 _settings.DisposalMode = next;
                 break;
             case 3: ChooseBackupFolder(); break;
-            case 4: _settings.Scope = _settings.Scope == DeletionScope.WorkFolder ? DeletionScope.PackageFolder : DeletionScope.WorkFolder; break;
+            case 4:
+                _settings.Scope = _settings.Scope switch
+                {
+                    DeletionScope.CompiledCache => DeletionScope.WorkFolder,
+                    DeletionScope.WorkFolder => DeletionScope.PackageFolder,
+                    _ => DeletionScope.CompiledCache,
+                };
+                break;
             case 5: _settings.DryRun = !_settings.DryRun; break;
         }
     }
@@ -721,13 +716,11 @@ public partial class MainWindow : Window
         var options = new ConsignOptions { Scope = _settings.Scope, DryRun = _settings.DryRun, IncludeUnknownSimVersions = includeUnknown };
         var targets = ConsignmentService.BuildTargets(groups, options);
         var excludedUnknown = includeUnknown ? new List<WasmEntry>() : groups.SelectMany(g => g.Entries).Where(e => !e.IsKnownSimVersion).ToList();
-        var noWork = _settings.Scope == DeletionScope.WorkFolder
-            ? groups.SelectMany(g => g.Entries.Where(e => !e.HasWorkFolder && (includeUnknown || e.IsKnownSimVersion)).Select(e => (g, e))).ToList()
-            : new List<(AircraftGroup, WasmEntry)>();
+        var nothingToRemove = groups.SelectMany(g => g.Entries.Where(e => !e.HasContentFor(_settings.Scope) && (includeUnknown || e.IsKnownSimVersion)).Select(e => (g, e))).ToList();
         bool needY = groups.Count > 5;
         TextBox? yBox = null;
 
-        ShowSheet(_settings.DryRun ? "CONFIRM CONSIGNMENT - DRY RUN" : "CONFIRM CONSIGNMENT", k =>
+        ShowSheet(_settings.DryRun ? "CONFIRM - DRY RUN" : "CONFIRM", k =>
         {
             switch (k)
             {
@@ -761,42 +754,41 @@ public partial class MainWindow : Window
             };
 
         Line($"{groups.Count} AIRCRAFT. {targets.Count} FOLDERS. {ByteFormat.Megabytes(targets.Sum(t => t.SizeBytes))}.");
-        Line($"THE FOLLOWING FOLDERS WILL BE {verb}:");
+        Line($"SCOPE: {ScopeText.Name(_settings.Scope)}.");
+        Line(_settings.Scope == DeletionScope.CompiledCache
+            ? $"THE COMPILED FILES IN THE FOLLOWING FOLDERS WILL BE {verb}:"
+            : $"THE FOLLOWING FOLDERS WILL BE {verb}:");
         Gap(6);
         foreach (var t in targets)
         {
             Line($"  {t.DisplayName}  [{t.SimVersionFolder}]  {ByteFormat.Format(t.SizeBytes)}");
-            Line($"    {t.Path}", dim: true, size: 18);
+            Line($"    {t.Label}", dim: true, size: 18);
         }
 
         if (excludedUnknown.Count > 0)
         {
             Gap(6);
-            Line("NOT INCLUDED - UNRECOGNISED FOLDERS (NEVER CONSIGNED AUTOMATICALLY):");
+            Line("NOT INCLUDED - UNKNOWN FOLDERS (NEVER CLEARED AUTOMATICALLY):");
             foreach (var e in excludedUnknown) Line($"    {e.PackagePath}", dim: true, size: 18);
             Line("PRESS U TO INCLUDE THEM.");
         }
 
-        if (noWork.Count > 0)
+        if (nothingToRemove.Count > 0)
         {
             Gap(6);
-            Line("NOTHING TO REMOVE (NO WORK FOLDER):");
-            foreach (var (g, e) in noWork) Line($"    {g.DisplayName}  [{e.SimVersionFolder}]", dim: true, size: 18);
+            Line($"NOTHING TO REMOVE ({ScopeText.NothingToRemove(_settings.Scope)}):");
+            foreach (var (g, e) in nothingToRemove) Line($"    {g.DisplayName}  [{e.SimVersionFolder}]", dim: true, size: 18);
         }
 
         Gap(12);
         Line("WARNING", inverse: true, blink: true);
-        Line("REMOVING A WORK FOLDER ERASES THAT AIRCRAFT'S OWN SETTINGS AND SAVED STATE, AND ANYTHING " +
-             "ADD-ON TOOLS STORED THERE: FOR EXAMPLE INSTALLED NAVDATA, A SIMBRIEF ALIAS OR A HOPPIE ID. " +
-             "YOU MAY NEED TO RE-ENTER OR REINSTALL THEM.");
-        if (_settings.Scope == DeletionScope.PackageFolder)
-            Line("WHOLE-FOLDER SCOPE ALSO REMOVES THE AIRCRAFT'S COMPILED MODULE DATA. THE SIM MAY NEED TO REBUILD IT.");
+        Line(ScopeText.Warning(_settings.Scope).ToUpperInvariant());
         if (!_settings.DryRun && _settings.DisposalMode == DisposalMode.Permanent)
             Line("PERMANENT DELETE IS ON. THERE IS NO RECYCLE BIN COPY.", inverse: true);
 
         if (targets.Count == 0)
         {
-            Prompt("NOTHING TO CONSIGN.  ESC RETURNS.");
+            Prompt("NOTHING TO CLEAR.  ESC RETURNS.");
             return;
         }
 
@@ -830,19 +822,19 @@ public partial class MainWindow : Window
                     if (k == Key.Escape) { CloseSheet(); return true; }
                     return false;
                 });
-                Line("FLIGHTSIMULATOR2024.EXE IS RUNNING. ITS DATA CANNOT BE CONSIGNED WHILE IT IS OPEN.");
+                Line("FLIGHTSIMULATOR2024.EXE IS RUNNING. ITS DATA CANNOT BE CLEARED WHILE IT IS OPEN.");
                 Line("NOTHING HAS BEEN TOUCHED.", dim: true);
                 Prompt("CLOSE THE SIMULATOR, THEN PRESS ENTER TO TRY AGAIN.  ESC CANCELS.");
                 return;
 
             case PreflightProblem.NothingToConsign:
-                ShowSheet("NOTHING TO CONSIGN", k =>
+                ShowSheet("NOTHING TO CLEAR", k =>
                 {
                     if (k is Key.Escape or Key.Enter) { CloseSheet(); return true; }
                     return false;
                 });
                 Line(pre.Message);
-                foreach (var r in pre.Refused) Line($"  {r.Target.Path}: {r.Reason}", dim: true, size: 18);
+                foreach (var r in pre.Refused) Line($"  {r.Target.Label}: {r.Reason}", dim: true, size: 18);
                 Prompt("ESC RETURNS.");
                 return;
 
@@ -863,7 +855,7 @@ public partial class MainWindow : Window
 
                     return false;
                 });
-                Line("THESE FOLDERS CANNOT GO TO THE RECYCLE BIN:");
+                Line("THESE ITEMS CANNOT GO TO THE RECYCLE BIN:");
                 Line(pre.Message.ToUpperInvariant(), dim: true);
                 Gap();
                 Line("WASM CHASM NEVER DELETES PERMANENTLY WITHOUT ASKING. CHOOSE:");
@@ -897,7 +889,7 @@ public partial class MainWindow : Window
         Ledger.IsHitTestVisible = false;
         Legend.IsEnabled = false;
         _consignCts = new CancellationTokenSource();
-        StatusText.Text = options.DryRun ? "DRY RUN IN PROGRESS." : "CONSIGNING. ESC STOPS AFTER THE CURRENT FOLDER.";
+        StatusText.Text = options.DryRun ? "DRY RUN IN PROGRESS." : "CLEARING. ESC STOPS AFTER THE CURRENT FOLDER.";
         if (!options.DryRun) _sound.StartHum();
 
         var remaining = pre.Targets.GroupBy(t => t.PackageId, StringComparer.OrdinalIgnoreCase)
@@ -942,7 +934,7 @@ public partial class MainWindow : Window
 
     private void ShowResults(IReadOnlyList<ConsignResult> results, bool dryRun)
     {
-        ShowSheet(dryRun ? "DRY RUN COMPLETE" : "CONSIGNMENT COMPLETE", k =>
+        ShowSheet(dryRun ? "DRY RUN DONE" : "DONE", k =>
         {
             if (k is Key.Enter or Key.Escape)
             {
@@ -954,14 +946,10 @@ public partial class MainWindow : Window
             return false;
         });
 
-        var released = results.Where(r => r.Outcome is ConsignOutcome.Removed or ConsignOutcome.WouldRemove).ToList();
         int skipped = results.Count(r => r.Outcome == ConsignOutcome.Skipped);
         int failed = results.Count(r => r.Outcome == ConsignOutcome.Failed);
-        long bytes = released.Sum(r => r.Target.SizeBytes);
 
-        Line(dryRun
-            ? $"DRY RUN COMPLETE. {released.Count} RECORDS WOULD BE RELEASED. {ByteFormat.Megabytes(bytes)} WOULD BE RECLAIMED."
-            : $"CONSIGNMENT COMPLETE. {released.Count} RECORDS RELEASED. {ByteFormat.Megabytes(bytes)} RECLAIMED.", size: 22);
+        Line(ScopeText.Summary(results, dryRun), size: 22);
         if (skipped + failed > 0) Line($"{skipped} SKIPPED. {failed} FAILED.", inverse: failed > 0);
         Gap();
 
@@ -969,22 +957,22 @@ public partial class MainWindow : Window
         {
             string tag = r.Outcome switch
             {
-                ConsignOutcome.Removed => "RELEASED",
-                ConsignOutcome.WouldRemove => "WOULD GO",
+                ConsignOutcome.Removed => "CLEARED",
+                ConsignOutcome.WouldRemove => "WOULD CLEAR",
                 ConsignOutcome.Skipped => "SKIPPED",
                 _ => "FAILED",
             };
-            Line($"{tag,-9} {r.Target.DisplayName}  [{r.Target.SimVersionFolder}]  {ByteFormat.Format(r.Target.SizeBytes)}",
+            Line($"{tag,-12} {r.Target.DisplayName}  [{r.Target.SimVersionFolder}]  {ByteFormat.Format(r.Target.SizeBytes)}",
                 inverse: r.Outcome == ConsignOutcome.Failed);
-            Line($"          {r.Target.Path}", dim: true, size: 18);
-            Line($"          {r.Reason.ToUpperInvariant()}", dim: r.Outcome != ConsignOutcome.Failed, size: 18);
-            if (r.LinkOnly) Line("          LINK REMOVED. ITS TARGET WAS NOT TOUCHED.", size: 18);
-            if (r.BackupPath is not null) Line($"          BACKUP: {r.BackupPath}", dim: true, size: 18);
+            Line($"             {r.Target.Label}", dim: true, size: 18);
+            Line($"             {r.Reason.ToUpperInvariant()}", dim: r.Outcome != ConsignOutcome.Failed, size: 18);
+            if (r.LinkOnly) Line("             LINK REMOVED. ITS TARGET WAS NOT TOUCHED.", size: 18);
+            if (r.BackupPath is not null) Line($"             BACKUP: {r.BackupPath}", dim: true, size: 18);
         }
 
         Gap();
         Line("LOG: " + _log.FilePath, dim: true, size: 18);
-        Prompt("ENTER OR ESC RETURNS TO THE LEDGER.");
+        Prompt("ENTER OR ESC RETURNS TO THE LIST.");
     }
 
     // ───────────────────────────── The consign animation ─────────────────────────────

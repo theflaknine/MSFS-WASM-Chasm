@@ -26,7 +26,7 @@ public partial class ChasmView : UserControl
         set
         {
             _queuedBytes = Math.Max(0, value);
-            DepthText.Text = ByteFormat.Megabytes(_queuedBytes) + " QUEUED";
+            DepthText.Text = ByteFormat.Megabytes(_queuedBytes) + " MARKED";
             UpdateGauge();
         }
     }

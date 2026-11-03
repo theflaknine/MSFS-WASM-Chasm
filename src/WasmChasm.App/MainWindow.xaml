@@ -67,7 +67,7 @@
 
                                     <!-- Ledger -->
                                     <DockPanel Grid.Column="0" Margin="0,8,0,0">
-                                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Term}" FontSize="24" Text="SELECT AIRCRAFT FOR CONSIGNMENT" />
+                                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Term}" FontSize="24" Text="SELECT AIRCRAFT TO CLEAR" />
                                         <Grid DockPanel.Dock="Top" Margin="0,4,0,4">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto" />
@@ -76,7 +76,7 @@
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Style="{StaticResource TermDim}" Text="FILTER&gt; " />
                                             <TextBox x:Name="FilterBox" Grid.Column="1" Style="{StaticResource TermTextBox}"
-                                                     TextChanged="OnFilterChanged" AutomationProperties.Name="Filter aircraft by name or package ID" />
+                                                     TextChanged="OnFilterChanged" AutomationProperties.Name="Filter aircraft by name" />
                                             <Button Grid.Column="2" Style="{StaticResource KeyButton}" Click="OnSortClick" Margin="12,0,0,0"
                                                     AutomationProperties.Name="Change sort order (F6)">
                                                 <TextBlock x:Name="SortText" Text="SORT: NAME ▲" FontFamily="{StaticResource TerminalFont}" FontSize="20" />
@@ -87,19 +87,17 @@
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="40" />
                                                 <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="150" />
                                                 <ColumnDefinition Width="78" />
                                                 <ColumnDefinition Width="96" />
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="1" Style="{StaticResource TermDim}" Text="TITLE" />
-                                            <TextBlock Grid.Column="2" Style="{StaticResource TermDim}" Text="PACKAGE" />
-                                            <TextBlock x:Name="SizeHeading" Grid.Column="3" Style="{StaticResource TermDim}" Text="WORK" HorizontalAlignment="Right" Margin="0,0,10,0" />
-                                            <TextBlock Grid.Column="4" Style="{StaticResource TermDim}" Text="MODIFIED" />
+                                            <TextBlock x:Name="SizeHeading" Grid.Column="2" Style="{StaticResource TermDim}" Text="CACHE" HorizontalAlignment="Right" Margin="0,0,10,0" />
+                                            <TextBlock Grid.Column="3" Style="{StaticResource TermDim}" Text="MODIFIED" />
                                         </Grid>
                                         <!-- Running total (FR-6) and status line. -->
                                         <StackPanel DockPanel.Dock="Bottom" Margin="0,4,0,0">
                                             <Rectangle Height="1" Fill="{DynamicResource Dim}" Margin="0,0,0,2" />
-                                            <TextBlock x:Name="TotalText" Style="{StaticResource Term}" Text="0 MARKED. 0 MB QUEUED."
+                                            <TextBlock x:Name="TotalText" Style="{StaticResource Term}" Text="0 MARKED. 0 MB."
                                                        AutomationProperties.LiveSetting="Polite" />
                                             <TextBlock x:Name="StatusText" Style="{StaticResource TermDim}" Text="" TextTrimming="CharacterEllipsis"
                                                        AutomationProperties.LiveSetting="Polite" />
@@ -113,7 +111,7 @@
                                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                                      VirtualizingPanel.IsVirtualizing="False"
                                                      KeyboardNavigation.TabNavigation="Once"
-                                                     AutomationProperties.Name="Aircraft ledger. Space marks an aircraft, Enter consigns marked aircraft."
+                                                     AutomationProperties.Name="Aircraft list. Space marks an aircraft, Enter clears marked aircraft."
                                                      PreviewKeyDown="OnLedgerPreviewKeyDown"
                                                      SelectionChanged="OnLedgerSelectionChanged">
                                                 <ListBox.ItemContainerStyle>
@@ -159,18 +157,13 @@
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="20" />
                                                                     <ColumnDefinition Width="*" />
-                                                                    <ColumnDefinition Width="150" />
                                                                     <ColumnDefinition Width="78" />
                                                                     <ColumnDefinition Width="96" />
                                                                 </Grid.ColumnDefinitions>
                                                                 <TextBlock Text="{Binding Marker}" />
-                                                                <StackPanel Grid.Column="1" Orientation="Horizontal" ClipToBounds="True">
-                                                                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-                                                                    <TextBlock Text="{Binding OrphanTag}" Opacity="0.65" Margin="8,0,0,0" />
-                                                                </StackPanel>
-                                                                <TextBlock Grid.Column="2" Text="{Binding PackageId}" Opacity="0.65" TextTrimming="CharacterEllipsis" Margin="6,0,0,0" />
-                                                                <TextBlock Grid.Column="3" Text="{Binding SizeText}" HorizontalAlignment="Right" Margin="0,0,10,0" />
-                                                                <TextBlock Grid.Column="4" Text="{Binding DateText}" />
+                                                                <TextBlock Grid.Column="1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                                                                <TextBlock Grid.Column="2" Text="{Binding SizeText}" HorizontalAlignment="Right" Margin="0,0,10,0" />
+                                                                <TextBlock Grid.Column="3" Text="{Binding DateText}" />
                                                             </Grid>
                                                             <ItemsControl ItemsSource="{Binding SubRows}" Margin="20,0,0,0" Focusable="False">
                                                                 <ItemsControl.Style>
@@ -194,7 +187,7 @@
                                                 </ListBox.ItemTemplate>
                                             </ListBox>
                                             <TextBlock x:Name="EmptyText" Style="{StaticResource TermDim}" Visibility="Collapsed" TextWrapping="Wrap"
-                                                       Margin="20,12,0,0" Text="NO RECORDS ON FILE." />
+                                                       Margin="20,12,0,0" Text="NO AIRCRAFT FOUND." />
                                         </Grid>
                                     </DockPanel>
 
@@ -211,7 +204,7 @@
                                         <Button Style="{StaticResource KeyButton}" Content="F3 SETTINGS" Tag="F3" Click="OnLegendClick" />
                                         <Button Style="{StaticResource KeyButton}" Content="F5 RESCAN" Tag="F5" Click="OnLegendClick" />
                                         <Button Style="{StaticResource KeyButton}" Content="SPACE SELECT" Tag="Space" Click="OnLegendClick" />
-                                        <Button Style="{StaticResource KeyButton}" Content="ENTER CONSIGN" Tag="Enter" Click="OnLegendClick" />
+                                        <Button Style="{StaticResource KeyButton}" Content="ENTER CLEAR" Tag="Enter" Click="OnLegendClick" />
                                         <Button Style="{StaticResource KeyButton}" Content="ESC CANCEL" Tag="Escape" Click="OnLegendClick" />
                                     </WrapPanel>
                                 </StackPanel>

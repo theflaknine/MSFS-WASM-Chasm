@@ -11,10 +11,30 @@ public sealed class LocationsConfig
     [JsonPropertyName("simProcessNames")] public List<string> SimProcessNames { get; set; } = new();
     [JsonPropertyName("knownSimVersionFolders")] public List<string> KnownSimVersionFolders { get; set; } = new();
     [JsonPropertyName("workFolderName")] public string WorkFolderName { get; set; } = "work";
+    [JsonPropertyName("compiledCachePattern")] public string CompiledCachePattern { get; set; } = DefaultCompiledCachePattern;
     [JsonPropertyName("stores")] public List<StoreDefinition> Stores { get; set; } = new();
     [JsonPropertyName("manifestSearch")] public List<string> ManifestSearch { get; set; } = new();
 
     public const string FileName = "locations.json";
+    public const string DefaultCompiledCachePattern = @"^m[0-9a-f]{16}_\d+\.(cache|dll|lib|natvis|obj|pdb)$";
+
+    /// <summary>
+    /// True for a file name the sim generates when it compiles a module. An invalid pattern (in a hand-edited
+    /// locations.json) matches nothing, so a bad edit can only ever remove less.
+    /// </summary>
+    public bool IsCompiledCacheFile(string fileName)
+    {
+        try
+        {
+            return System.Text.RegularExpressions.Regex.IsMatch(
+                fileName, CompiledCachePattern,
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

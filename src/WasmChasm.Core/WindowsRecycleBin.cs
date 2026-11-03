@@ -16,7 +16,9 @@ public sealed class WindowsRecycleBin : IRecycleBin
         if (path.Length > MaxShellPath)
             return "Path is too long for the Recycle Bin.";
 
-        var driveRoot = Path.GetPathRoot(path);
+        // The bin that matters is the one on the drive holding the data, not the drive named in the path:
+        // a Store install moved to another drive reaches it through a junction under %LOCALAPPDATA%.
+        var driveRoot = PhysicalDriveRoot(path);
         if (string.IsNullOrEmpty(driveRoot)) return "Path has no drive.";
 
         try
@@ -42,6 +44,28 @@ public sealed class WindowsRecycleBin : IRecycleBin
         return null;
     }
 
+    /// <summary>The drive root a path really lands on, following any links among its ancestors.</summary>
+    internal static string? PhysicalDriveRoot(string path)
+    {
+        var current = Path.GetPathRoot(path);
+        if (string.IsNullOrEmpty(current)) return current;
+
+        var segments = path.Substring(current.Length).Split(new[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var segment in segments)
+        {
+            current = Path.Combine(current, segment);
+            try
+            {
+                var target = new DirectoryInfo(current).ResolveLinkTarget(returnFinalTarget: true);
+                if (target is not null) current = target.FullName;
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+
+        return Path.GetPathRoot(current);
+    }
+
     public void Recycle(string path)
     {
         var op = new SHFILEOPSTRUCTW
@@ -57,8 +81,8 @@ public sealed class WindowsRecycleBin : IRecycleBin
             throw new RecycleBinUnavailableException("Recycling was declined; the folder could not go to the Recycle Bin.");
         if (rc != 0)
             throw new IOException($"Recycle Bin operation failed (shell error 0x{rc:X}). The folder may be in use or access was denied.");
-        if (Directory.Exists(path))
-            throw new IOException("The folder is still present after recycling; it may be in use.");
+        if (Directory.Exists(path) || File.Exists(path))
+            throw new IOException("The item is still present after recycling; it may be in use.");
     }
 
     private static string? VolumeRegistryKey(string driveRoot)

@@ -50,6 +50,13 @@ public sealed class WasmScanner : IWasmScanner
         long workBytes = 0;
         if (hasWork && !workIsLink) (workBytes, _) = FileSystemWalk.Measure(workDir);
 
+        // Only real files directly in the package folder, by name. Links are never treated as cache.
+        var compiled = pkgIsLink
+            ? new List<FileInfo>()
+            : FileSystemWalk.Files(pkgDir)
+                .Where(f => _config.IsCompiledCacheFile(f.Name) && !FileSystemWalk.IsReparsePoint(f))
+                .ToList();
+
         return new WasmEntry(
             PackageId: pkgDir.Name,
             SimVersionFolder: simVersion,
@@ -60,7 +67,9 @@ public sealed class WasmScanner : IWasmScanner
             WorkSizeBytes: workBytes,
             LastModifiedUtc: pkgWrite,
             IsKnownSimVersion: known,
-            WorkIsReparsePoint: workIsLink || pkgIsLink);
+            WorkIsReparsePoint: workIsLink || pkgIsLink,
+            CompiledFiles: compiled.Select(f => f.FullName).ToList(),
+            CompiledSizeBytes: compiled.Sum(f => f.Length));
     }
 
     /// <summary>FR-4: groups entries by package ID across sibling folders.</summary>

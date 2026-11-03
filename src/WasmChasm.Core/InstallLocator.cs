@@ -26,10 +26,19 @@ public sealed class ConfiguredInstallLocator : IInstallLocator
         var root = PathTemplate.Expand(_store.WasmRoot, _getEnv);
         if (root is null || !Directory.Exists(root)) return null;
 
+        // A WASM folder alone doesn't prove an install: add-on tools can create one at the Steam path on a
+        // machine that only has the Store version. Where a store defines UserCfg.opt, that file must exist too.
         string? cfg = _store.UserCfg is null ? null : PathTemplate.Expand(_store.UserCfg, _getEnv);
-        if (cfg is not null && !File.Exists(cfg)) cfg = null;
+        if (_store.UserCfg is not null && (cfg is null || !File.Exists(cfg))) return null;
 
         return new InstallLocation(_store.Id, _store.Label, Path.GetFullPath(root), cfg);
+    }
+
+    /// <summary>The WASM folder, if it exists but isn't backed by an install. Never cleared unless browsed to.</summary>
+    public string? FindStrayRoot()
+    {
+        var root = PathTemplate.Expand(_store.WasmRoot, _getEnv);
+        return root is not null && Directory.Exists(root) && Locate() is null ? Path.GetFullPath(root) : null;
     }
 }
 

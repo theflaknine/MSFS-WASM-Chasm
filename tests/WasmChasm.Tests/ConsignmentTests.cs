@@ -13,7 +13,7 @@ public class ConsignmentTests
     }
 
     [Fact]
-    public void Default_scope_targets_work_folder_only_and_excludes_unknown_siblings()
+    public void Work_scope_targets_work_folder_only_and_excludes_unknown_siblings()
     {
         using var f = new Fixture();
         f.AddWasm("MSFS2024", "a");
@@ -21,13 +21,13 @@ public class ConsignmentTests
         f.AddWasm("MSFS2024_now_valid", "a");
         var groups = Catalog.Load(f.Install, f.Config);
 
-        var targets = ConsignmentService.BuildTargets(groups, new ConsignOptions());
+        var targets = ConsignmentService.BuildTargets(groups, new ConsignOptions { Scope = DeletionScope.WorkFolder });
 
         Assert.Equal(2, targets.Count);
         Assert.All(targets, t => Assert.Equal("work", Path.GetFileName(t.Path)));
         Assert.DoesNotContain(targets, t => t.SimVersionFolder == "MSFS2024_now_valid");
 
-        var withUnknown = ConsignmentService.BuildTargets(groups, new ConsignOptions { IncludeUnknownSimVersions = true });
+        var withUnknown = ConsignmentService.BuildTargets(groups, new ConsignOptions { Scope = DeletionScope.WorkFolder, IncludeUnknownSimVersions = true });
         Assert.Equal(3, withUnknown.Count);
 
         var whole = ConsignmentService.BuildTargets(groups, new ConsignOptions { Scope = DeletionScope.PackageFolder });
@@ -40,7 +40,7 @@ public class ConsignmentTests
         using var f = new Fixture();
         var pkg = f.AddWasm("MSFS2024", "a");
         var (svc, _, bin, _) = Service(f);
-        var options = new ConsignOptions { DryRun = true };
+        var options = new ConsignOptions { Scope = DeletionScope.WorkFolder, DryRun = true };
         var targets = ConsignmentService.BuildTargets(Catalog.Load(f.Install, f.Config), options);
 
         var results = svc.Execute(svc.Preflight(targets, DisposalMode.RecycleBin).Targets, new RecycleBinStrategy(bin), options);
@@ -56,7 +56,7 @@ public class ConsignmentTests
         using var f = new Fixture();
         var pkg = f.AddWasm("MSFS2024", "a", otherBytes: 10);
         var (svc, _, bin, log) = Service(f);
-        var options = new ConsignOptions();
+        var options = new ConsignOptions { Scope = DeletionScope.WorkFolder };
         var targets = ConsignmentService.BuildTargets(Catalog.Load(f.Install, f.Config), options);
         var progress = new List<ConsignProgress>();
 
@@ -78,7 +78,7 @@ public class ConsignmentTests
         f.AddWasm("MSFS2024", "a");
         var (svc, sim, _, _) = Service(f);
         sim.RunningAfterCalls = 0;
-        var targets = ConsignmentService.BuildTargets(Catalog.Load(f.Install, f.Config), new ConsignOptions());
+        var targets = ConsignmentService.BuildTargets(Catalog.Load(f.Install, f.Config), new ConsignOptions { Scope = DeletionScope.WorkFolder });
         Assert.Equal(PreflightProblem.SimRunning, svc.Preflight(targets, DisposalMode.RecycleBin).Problem);
     }
 
@@ -90,7 +90,7 @@ public class ConsignmentTests
         f.AddWasm("MSFS2024", "b");
         f.AddWasm("MSFS2024", "c");
         var (svc, sim, bin, _) = Service(f);
-        var options = new ConsignOptions();
+        var options = new ConsignOptions { Scope = DeletionScope.WorkFolder };
         var targets = ConsignmentService.BuildTargets(Catalog.Load(f.Install, f.Config), options);
         var pre = svc.Preflight(targets, DisposalMode.RecycleBin);
         sim.RunningAfterCalls = sim.Calls + 1; // first folder OK, then the sim appears
@@ -108,13 +108,13 @@ public class ConsignmentTests
         var pkg = f.AddWasm("MSFS2024", "a");
         var (svc, _, bin, _) = Service(f);
         bin.Unavailable = "Recycle Bin disabled";
-        var targets = ConsignmentService.BuildTargets(Catalog.Load(f.Install, f.Config), new ConsignOptions());
+        var targets = ConsignmentService.BuildTargets(Catalog.Load(f.Install, f.Config), new ConsignOptions { Scope = DeletionScope.WorkFolder });
 
         var pre = svc.Preflight(targets, DisposalMode.RecycleBin);
         Assert.Equal(PreflightProblem.RecycleBinUnavailable, pre.Problem);
 
         // Even if a caller ignored preflight, the strategy never silently deletes.
-        var results = svc.Execute(pre.Targets, new RecycleBinStrategy(bin), new ConsignOptions());
+        var results = svc.Execute(pre.Targets, new RecycleBinStrategy(bin), new ConsignOptions { Scope = DeletionScope.WorkFolder });
         Assert.Equal(ConsignOutcome.Skipped, Assert.Single(results).Outcome);
         Assert.True(Directory.Exists(Path.Combine(pkg, "work")));
     }
@@ -126,7 +126,7 @@ public class ConsignmentTests
         var pkg = f.AddWasm("MSFS2024", "a", workBytes: 2048);
         var backups = Path.Combine(f.Base, "backups");
         var (svc, _, bin, _) = Service(f);
-        var options = new ConsignOptions();
+        var options = new ConsignOptions { Scope = DeletionScope.WorkFolder };
         var targets = ConsignmentService.BuildTargets(Catalog.Load(f.Install, f.Config), options);
 
         var results = svc.Execute(targets, new ZipThenStrategy(backups, new RecycleBinStrategy(bin)), options);
@@ -147,9 +147,9 @@ public class ConsignmentTests
         var pkg = Path.Combine(f.WasmRoot, "MSFS2024", "linked");
         Directory.CreateDirectory(pkg);
         var target = f.Outside("addons-linker-target");
-        Directory.CreateSymbolicLink(Path.Combine(pkg, "work"), target);
+        Fixture.CreateDirectoryLink(Path.Combine(pkg, "work"), target);
         var (svc, _, _, _) = Service(f);
-        var options = new ConsignOptions();
+        var options = new ConsignOptions { Scope = DeletionScope.WorkFolder };
         var targets = ConsignmentService.BuildTargets(Catalog.Load(f.Install, f.Config), options);
 
         var results = svc.Execute(svc.Preflight(targets, DisposalMode.Permanent).Targets, new PermanentStrategy(), options);
@@ -167,9 +167,9 @@ public class ConsignmentTests
         using var f = new Fixture();
         var pkg = f.AddWasm("MSFS2024", "a");
         var outside = f.Outside("nested-target");
-        Directory.CreateSymbolicLink(Path.Combine(pkg, "work", "sub", "navdata"), outside);
+        Fixture.CreateDirectoryLink(Path.Combine(pkg, "work", "sub", "navdata"), outside);
         var (svc, _, _, _) = Service(f);
-        var options = new ConsignOptions();
+        var options = new ConsignOptions { Scope = DeletionScope.WorkFolder };
         var targets = ConsignmentService.BuildTargets(Catalog.Load(f.Install, f.Config), options);
 
         svc.Execute(targets, new PermanentStrategy(), options);
@@ -190,7 +190,7 @@ public class ConsignmentTests
         Assert.Empty(pre.Targets);
         Assert.Single(pre.Refused);
 
-        var results = svc.Execute(forged, new PermanentStrategy(), new ConsignOptions());
+        var results = svc.Execute(forged, new PermanentStrategy(), new ConsignOptions { Scope = DeletionScope.WorkFolder });
         Assert.Equal(ConsignOutcome.Skipped, Assert.Single(results).Outcome);
         Assert.True(File.Exists(Path.Combine(outside, "precious.txt")));
     }
@@ -205,7 +205,7 @@ public class ConsignmentTests
         Directory.CreateDirectory(deep);
         File.WriteAllText(Path.Combine(deep, "f.txt"), "x");
         var (svc, _, _, _) = Service(f);
-        var options = new ConsignOptions();
+        var options = new ConsignOptions { Scope = DeletionScope.WorkFolder };
         var groups = Catalog.Load(f.Install, f.Config);
         Assert.True(groups[0].WorkSizeBytes > 100);
 
@@ -221,7 +221,7 @@ public class ConsignmentTests
         using var f = new Fixture();
         var pkg = f.AddWasm("MSFS2024", "a");
         var (svc, _, _, _) = Service(f);
-        var options = new ConsignOptions();
+        var options = new ConsignOptions { Scope = DeletionScope.WorkFolder };
         var targets = ConsignmentService.BuildTargets(Catalog.Load(f.Install, f.Config), options);
         Directory.Delete(Path.Combine(pkg, "work"), true);
 
@@ -257,8 +257,8 @@ public class CliTests
         Assert.Contains("\"packageId\": \"pmdg-aircraft-77w\"", o.ToString());
 
         o = new StringWriter();
-        Assert.Equal(0, WasmChasm.Cli.Program.Run(new[] { "consign", "pmdg-aircraft-77w", "--root", f.WasmRoot, "--dry-run" }, o, o, f.Config));
-        Assert.Contains("DRY RUN COMPLETE. 1 RECORDS WOULD BE RELEASED", o.ToString());
+        Assert.Equal(0, WasmChasm.Cli.Program.Run(new[] { "clear", "pmdg-aircraft-77w", "--root", f.WasmRoot, "--dry-run", "--scope", "work" }, o, o, f.Config));
+        Assert.Contains("DRY RUN DONE. 1 AIRCRAFT WOULD BE CLEARED", o.ToString());
         Assert.True(Directory.Exists(Path.Combine(pkg, "work")));
     }
 
@@ -268,7 +268,7 @@ public class CliTests
         using var f = new Fixture();
         var pkg = f.AddWasm("MSFS2024", "a");
         var o = new StringWriter();
-        WasmChasm.Cli.Program.Run(new[] { "consign", "a", "--root", f.WasmRoot, "--mode", "permanent" }, o, o, f.Config);
+        WasmChasm.Cli.Program.Run(new[] { "clear", "a", "--root", f.WasmRoot, "--mode", "permanent", "--scope", "work" }, o, o, f.Config);
         Assert.True(Directory.Exists(Path.Combine(pkg, "work")));
         Assert.Contains("DRY RUN", o.ToString());
     }

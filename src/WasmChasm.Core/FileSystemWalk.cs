@@ -73,6 +73,13 @@ public static class FileSystemWalk
         catch (UnauthorizedAccessException) { return DateTime.MinValue; }
     }
 
+    public static IEnumerable<FileInfo> Files(DirectoryInfo dir)
+    {
+        try { return dir.EnumerateFiles("*", Shallow).ToList(); }
+        catch (IOException) { return Array.Empty<FileInfo>(); }
+        catch (UnauthorizedAccessException) { return Array.Empty<FileInfo>(); }
+    }
+
     public static IEnumerable<DirectoryInfo> SubDirectories(DirectoryInfo dir)
     {
         try { return dir.EnumerateDirectories("*", Shallow).ToList(); }

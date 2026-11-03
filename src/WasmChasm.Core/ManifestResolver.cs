@@ -6,7 +6,7 @@ namespace WasmChasm.Core;
 /// <summary>Maps a package ID to its display title.</summary>
 public interface IManifestResolver
 {
-    /// <summary>Returns the manifest title, or null if the package isn't installed (orphan).</summary>
+    /// <summary>Returns the manifest title, or null if none could be read.</summary>
     string? ResolveTitle(string packageId);
 }
 

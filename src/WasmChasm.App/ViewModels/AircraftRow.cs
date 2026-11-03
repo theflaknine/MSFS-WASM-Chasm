@@ -19,10 +19,8 @@ public sealed class AircraftRow : ObservableObject
     public AircraftGroup Group { get; }
     public IReadOnlyList<SubRow> SubRows { get; }
 
-    public string Title => Group.IsOrphan ? Group.PackageId : Group.DisplayName;
+    public string Title => Group.DisplayName;
     public string PackageId => Group.PackageId;
-    public bool IsOrphan => Group.IsOrphan;
-    public string OrphanTag => Group.IsOrphan ? "ORPHANED" : "";
     public DateTime LastModified => Group.LastModifiedUtc;
     public string DateText => Group.LastModifiedUtc == DateTime.MinValue ? "----------" : Group.LastModifiedUtc.ToLocalTime().ToString("yyyy-MM-dd");
 
@@ -31,7 +29,7 @@ public sealed class AircraftRow : ObservableObject
     public string SizeText => ByteFormat.Format(ScopedBytes);
 
     /// <summary>Show sub-rows when there's more than one folder or any is unusual.</summary>
-    public bool ShowSubRows => SubRows.Count > 1 || SubRows.Any(s => !s.Entry.IsKnownSimVersion || s.Entry.WorkIsReparsePoint || !s.Entry.HasWorkFolder);
+    public bool ShowSubRows => SubRows.Count > 1 || SubRows.Any(s => !s.Entry.IsKnownSimVersion || s.Entry.WorkIsReparsePoint || !s.Entry.HasContentFor(_scope));
 
     public DeletionScope Scope
     {
@@ -41,6 +39,7 @@ public sealed class AircraftRow : ObservableObject
             if (!Set(ref _scope, value)) return;
             Raise(nameof(ScopedBytes));
             Raise(nameof(SizeText));
+            Raise(nameof(ShowSubRows));
             foreach (var s in SubRows) s.Refresh();
         }
     }
@@ -64,7 +63,7 @@ public sealed class AircraftRow : ObservableObject
     }
 
     public string AccessibleName =>
-        $"{Title}, package {PackageId}, {SizeText}, modified {DateText}{(IsOrphan ? ", orphaned" : "")}{(IsMarked ? ", marked" : "")}";
+        $"{Title}, {SizeText}, modified {DateText}{(IsMarked ? ", marked" : "")}";
 }
 
 public sealed class SubRow : ObservableObject
@@ -83,11 +82,11 @@ public sealed class SubRow : ObservableObject
     {
         get
         {
-            long bytes = _owner.Scope == DeletionScope.WorkFolder ? Entry.WorkSizeBytes : Entry.SizeBytes;
+            long bytes = Entry.SizeFor(_owner.Scope);
             var flags = new List<string>();
-            if (!Entry.IsKnownSimVersion) flags.Add("UNRECOGNISED FOLDER, NOT AUTO-CONSIGNED");
+            if (!Entry.IsKnownSimVersion) flags.Add("UNKNOWN FOLDER, NOT INCLUDED");
             if (Entry.WorkIsReparsePoint) flags.Add("LINK");
-            if (!Entry.HasWorkFolder) flags.Add("NO WORK FOLDER");
+            if (!Entry.HasContentFor(_owner.Scope)) flags.Add(ScopeText.NothingToRemove(_owner.Scope));
             return $"  └ {Entry.SimVersionFolder}  {ByteFormat.Format(bytes)}" + (flags.Count > 0 ? "  [" + string.Join("; ", flags) + "]" : "");
         }
     }

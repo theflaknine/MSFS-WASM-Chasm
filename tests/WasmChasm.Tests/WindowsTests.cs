@@ -45,7 +45,7 @@ public class WindowsTests
         Assert.True(Directory.Exists(link));
 
         var svc = new ConsignmentService(Catalog.GuardFor(f.Install), new FakeSim(), null);
-        var options = new ConsignOptions();
+        var options = new ConsignOptions { Scope = DeletionScope.WorkFolder };
         var groups = Catalog.Load(f.Install, f.Config);
         Assert.True(groups[0].Entries[0].WorkIsReparsePoint);
 
@@ -63,7 +63,7 @@ public class WindowsTests
         var a = f.AddWasm("MSFS2024", "a");
         f.AddWasm("MSFS2024", "b");
         var svc = new ConsignmentService(Catalog.GuardFor(f.Install), new FakeSim(), null);
-        var options = new ConsignOptions();
+        var options = new ConsignOptions { Scope = DeletionScope.WorkFolder };
         var targets = ConsignmentService.BuildTargets(Catalog.Load(f.Install, f.Config), options);
 
         using (File.Open(Path.Combine(a, "work", "sub", "state.bin"), FileMode.Open, FileAccess.Read, FileShare.None))

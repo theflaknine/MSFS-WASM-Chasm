@@ -54,6 +54,15 @@ public static class SafeDelete
         return true;
     }
 
+    /// <summary>Deletes one file. If it is a link, only the link goes.</summary>
+    public static void DeleteFile(string path)
+    {
+        var file = new FileInfo(path);
+        if (!file.Exists) return;
+        if (file.IsReadOnly) file.IsReadOnly = false;
+        file.Delete();
+    }
+
     /// <summary>Recursive delete that never enters reparse points: links are removed, targets untouched.</summary>
     public static void DeleteTree(string path)
     {
@@ -99,6 +108,18 @@ public sealed class RecycleBinStrategy : IDisposalStrategy
 
     public DisposalReport Dispose(ConsignTarget target)
     {
+        if (target.Files is not null)
+        {
+            foreach (var file in target.Files)
+            {
+                var whyNot = _bin.WhyCannotRecycle(file, target.SizeBytes);
+                if (whyNot is not null) throw new RecycleBinUnavailableException(whyNot);
+                _bin.Recycle(file);
+            }
+
+            return new DisposalReport(false, null);
+        }
+
         if (SafeDelete.TryRemoveLinkOnly(target.Path)) return new DisposalReport(true, null);
 
         var why = _bin.WhyCannotRecycle(target.Path, target.SizeBytes);
@@ -114,6 +135,12 @@ public sealed class PermanentStrategy : IDisposalStrategy
 
     public DisposalReport Dispose(ConsignTarget target)
     {
+        if (target.Files is not null)
+        {
+            foreach (var file in target.Files) SafeDelete.DeleteFile(file);
+            return new DisposalReport(false, null);
+        }
+
         if (SafeDelete.TryRemoveLinkOnly(target.Path)) return new DisposalReport(true, null);
         SafeDelete.DeleteTree(target.Path);
         return new DisposalReport(false, null);
@@ -141,7 +168,7 @@ public sealed class ZipThenStrategy : IDisposalStrategy
     public DisposalReport Dispose(ConsignTarget target)
     {
         // A link has nothing of its own to back up; just remove the link.
-        if (SafeDelete.TryRemoveLinkOnly(target.Path)) return new DisposalReport(true, null);
+        if (target.Files is null && SafeDelete.TryRemoveLinkOnly(target.Path)) return new DisposalReport(true, null);
 
         var zip = BackupZip.Create(target, _backupFolder, _clock());
         var inner = _then.Dispose(target);
@@ -154,7 +181,7 @@ public static class BackupZip
     public static string Create(ConsignTarget target, string backupFolder, DateTime now)
     {
         Directory.CreateDirectory(backupFolder);
-        var leaf = Path.GetFileName(Path.TrimEndingDirectorySeparator(target.Path));
+        var leaf = target.Files is not null ? "compiled" : Path.GetFileName(Path.TrimEndingDirectorySeparator(target.Path));
         var baseName = Sanitise($"{target.PackageId}_{target.SimVersionFolder}_{leaf}_{now:yyyyMMdd-HHmmss}");
         var zipPath = Path.Combine(backupFolder, baseName + ".zip");
         for (int n = 2; File.Exists(zipPath); n++)
@@ -164,7 +191,15 @@ public static class BackupZip
         {
             using var stream = new FileStream(zipPath, FileMode.CreateNew, FileAccess.Write);
             using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
-            AddDirectory(archive, new DirectoryInfo(target.Path), leaf);
+            if (target.Files is not null)
+            {
+                foreach (var file in target.Files)
+                    archive.CreateEntryFromFile(file, leaf + "/" + Path.GetFileName(file), CompressionLevel.Optimal);
+            }
+            else
+            {
+                AddDirectory(archive, new DirectoryInfo(target.Path), leaf);
+            }
         }
         catch
         {

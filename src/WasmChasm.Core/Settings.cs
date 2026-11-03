@@ -12,7 +12,7 @@ public sealed class AppSettings
     public bool Sound { get; set; }
     public DisposalMode DisposalMode { get; set; } = DisposalMode.RecycleBin;
     public string? BackupFolder { get; set; }
-    public DeletionScope Scope { get; set; } = DeletionScope.WorkFolder;
+    public DeletionScope Scope { get; set; } = DeletionScope.CompiledCache;
     public bool DryRun { get; set; }
 
     private static readonly JsonSerializerOptions Options = new()

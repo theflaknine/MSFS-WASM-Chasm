@@ -4,6 +4,7 @@
   "simProcessNames": [ "FlightSimulator2024" ],
   "knownSimVersionFolders": [ "MSFS2024", "MSFS2020" ],
   "workFolderName": "work",
+  "compiledCachePattern": "^m[0-9a-f]{16}_\\d+\\.(cache|dll|lib|natvis|obj|pdb)$",
   "stores": [
     {
       "id": "steam",
@@ -22,8 +23,10 @@
   ],
   "manifestSearch": [
     "Community\\{package}",
+    "Community2024\\{package}",
     "Official\\{package}",
     "Official\\*\\{package}",
+    "Official2024\\*\\{package}",
     "Official2020\\*\\{package}",
     "StreamedPackages\\{package}",
     "StreamedPackages\\*\\{package}"

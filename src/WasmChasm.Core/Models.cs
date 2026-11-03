@@ -21,7 +21,27 @@ public sealed record WasmEntry(
     long WorkSizeBytes,
     DateTime LastModifiedUtc,
     bool IsKnownSimVersion,
-    bool WorkIsReparsePoint);
+    bool WorkIsReparsePoint,
+    IReadOnlyList<string>? CompiledFiles = null,
+    long CompiledSizeBytes = 0)
+{
+    public bool HasCompiledCache => CompiledFiles is { Count: > 0 };
+
+    /// <summary>Whether this entry has anything for the given scope to remove.</summary>
+    public bool HasContentFor(DeletionScope scope) => scope switch
+    {
+        DeletionScope.CompiledCache => HasCompiledCache,
+        DeletionScope.WorkFolder => HasWorkFolder,
+        _ => true,
+    };
+
+    public long SizeFor(DeletionScope scope) => scope switch
+    {
+        DeletionScope.CompiledCache => CompiledSizeBytes,
+        DeletionScope.WorkFolder => WorkSizeBytes,
+        _ => SizeBytes,
+    };
+}
 
 /// <summary>All entries for one package ID across sibling sim-version folders (FR-4).</summary>
 public sealed class AircraftGroup
@@ -35,27 +55,28 @@ public sealed class AircraftGroup
 
     public string PackageId { get; }
 
-    /// <summary>Resolved manifest title, or null when the package is no longer installed.</summary>
+    /// <summary>Resolved manifest title, or null when none could be read: the display name is then the package ID.</summary>
     public string? Title { get; }
 
     public string DisplayName => Title ?? PackageId;
-    public bool IsOrphan => Title is null;
     public IReadOnlyList<WasmEntry> Entries { get; }
 
     public long SizeBytes => Entries.Sum(e => e.SizeBytes);
     public long WorkSizeBytes => Entries.Sum(e => e.WorkSizeBytes);
+    public long CompiledSizeBytes => Entries.Sum(e => e.CompiledSizeBytes);
     public DateTime LastModifiedUtc => Entries.Count == 0 ? DateTime.MinValue : Entries.Max(e => e.LastModifiedUtc);
 
     /// <summary>Size of what a consignment with the given scope would remove (known folders only).</summary>
     public long ScopedSize(DeletionScope scope, bool includeUnknown = false) =>
-        Entries.Where(e => includeUnknown || e.IsKnownSimVersion)
-               .Sum(e => scope == DeletionScope.WorkFolder ? e.WorkSizeBytes : e.SizeBytes);
+        Entries.Where(e => includeUnknown || e.IsKnownSimVersion).Sum(e => e.SizeFor(scope));
 }
 
 /// <summary>FR-10: what gets removed for each entry.</summary>
 public enum DeletionScope
 {
-    /// <summary>Only the package folder's work subfolder (default).</summary>
+    /// <summary>Only the sim-generated compiled module files beside the work folder (default).</summary>
+    CompiledCache,
+    /// <summary>Only the package folder's work subfolder: the add-on's persistent data.</summary>
     WorkFolder,
     /// <summary>The whole package folder.</summary>
     PackageFolder,
@@ -78,8 +99,15 @@ public enum ConsignOutcome
     Failed,
 }
 
-/// <summary>One folder queued for disposal.</summary>
-public sealed record ConsignTarget(string PackageId, string DisplayName, string SimVersionFolder, string Path, long SizeBytes);
+/// <summary>
+/// One folder queued for disposal or, when <see cref="Files"/> is set, those files inside the folder at
+/// <see cref="Path"/>. In that case the folder itself and everything else in it stay.
+/// </summary>
+public sealed record ConsignTarget(string PackageId, string DisplayName, string SimVersionFolder, string Path, long SizeBytes, IReadOnlyList<string>? Files = null)
+{
+    /// <summary>The path for display and logs, saying plainly when only some files are affected.</summary>
+    public string Label => Files is null ? Path : $"{Path} ({Files.Count} compiled files; work folder kept)";
+}
 
 public sealed record ConsignResult(
     ConsignTarget Target,
