@@ -45,16 +45,19 @@ jobs:
           Copy-Item LICENSE release/LICENSE.txt
           Copy-Item THIRD-PARTY-NOTICES.txt release/
           Copy-Item src/WasmChasm.App/Fonts/OFL.txt release/
-          Get-ChildItem release -File | ForEach-Object {
+          # One zip for users. The checksum file sits beside it, outside the zip, so the zip itself can be checked.
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path release/* -DestinationPath dist/wasm-chasm-win-x64.zip
+          Get-ChildItem dist -File | ForEach-Object {
             $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
             "$h  $($_.Name)"
-          } | Set-Content release/SHA256SUMS.txt
-          Get-Content release/SHA256SUMS.txt
+          } | Set-Content dist/SHA256SUMS.txt
+          Get-Content dist/SHA256SUMS.txt
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: wasm-chasm-win-x64
-          path: release/
+          path: dist/
 
   release:
     needs: build
@@ -68,14 +71,14 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: wasm-chasm-win-x64
-          path: release
+          path: dist
 
-      # Lets anyone prove the exe was built here from this source: gh attestation verify WasmChasm.exe -R theflaknine/MSFS-WASM-Chasm
+      # Lets anyone prove the exe was built here from this source: gh attestation verify wasm-chasm-win-x64.zip -R theflaknine/MSFS-WASM-Chasm
       - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
-          subject-path: release/WasmChasm.exe
+          subject-path: dist/wasm-chasm-win-x64.zip
 
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          files: release/*
+          files: dist/*
           draft: true

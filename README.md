@@ -26,11 +26,11 @@ please run it with dry run on first and tell me in [Issues](https://github.com/t
 whether it found your install. See [Status](#status).
 
 Get it only from this repository's
-[Releases page](https://github.com/theflaknine/MSFS-WASM-Chasm/releases). It's one small exe for 64-bit Windows 10
+[Releases page](https://github.com/theflaknine/MSFS-WASM-Chasm/releases). It is one small zip with the exe inside, for 64-bit Windows 10
 or 11, with nothing to install. Each release includes `SHA256SUMS.txt`, so you can check your download in PowerShell:
 
 ```
-Get-FileHash WasmChasm.exe -Algorithm SHA256
+Get-FileHash wasm-chasm-win-x64.zip -Algorithm SHA256
 ```
 
 The app isn't code-signed at the moment, so Windows SmartScreen may warn you when you first run it.
