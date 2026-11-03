@@ -3,13 +3,14 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:WasmChasm.App.Views"
         Title="WASM Chasm"
+        Icon="pack://application:,,,/Assets/WasmChasm.ico"
         Width="1100" Height="860" MinWidth="640" MinHeight="500"
         Background="#050403"
         WindowStartupLocation="CenterScreen"
         UseLayoutRounding="True"
         PreviewKeyDown="OnPreviewKeyDown">
     <!-- The window letterboxes around a fixed 4:3 monitor. -->
-    <Viewbox Stretch="Uniform" Margin="12">
+    <Viewbox x:Name="Monitor" Stretch="Uniform" Margin="12">
         <Grid Width="1040" Height="800">
             <!-- Bezel: thick, rounded, matte plastic. -->
             <Border x:Name="Bezel" CornerRadius="46" BorderThickness="2" BorderBrush="#3A352E">
@@ -22,7 +23,7 @@
                 </Border.Background>
                 <Grid>
                     <!-- Inner recess around the glass. -->
-                    <Border Margin="34,30,34,50" CornerRadius="34" Background="#0A0907" BorderBrush="#0C0B09" BorderThickness="6">
+                    <Border x:Name="ScreenFrame" Margin="34,30,34,50" CornerRadius="34" Background="#0A0907" BorderBrush="#0C0B09" BorderThickness="6">
                         <Grid x:Name="ScreenRoot" Width="952" Height="708" HorizontalAlignment="Center" VerticalAlignment="Center"
                               Background="{DynamicResource ScreenBg}">
                             <Grid.Clip>
@@ -48,10 +49,16 @@
                                     <Border Style="{StaticResource InverseBorder}">
                                         <TextBlock Style="{StaticResource InverseText}" Text="WASM CHASM" />
                                     </Border>
-                                    <Button x:Name="InstallButton" Grid.Column="1" Style="{StaticResource KeyButton}" HorizontalAlignment="Center"
-                                            Click="OnSwitchInstallClick" AutomationProperties.Name="Detected install. Press F2 to switch.">
-                                        <TextBlock x:Name="InstallText" Text="INSTALL: ----" FontFamily="{StaticResource TerminalFont}" FontSize="20" />
-                                    </Button>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Button x:Name="InstallButton" Style="{StaticResource KeyButton}"
+                                                Click="OnSwitchInstallClick" AutomationProperties.Name="Detected install. Press F2 to switch.">
+                                            <TextBlock x:Name="InstallText" Text="INSTALL: ----" FontFamily="{DynamicResource TerminalFont}" FontSize="{DynamicResource TextSize}" Foreground="{DynamicResource Phosphor}" />
+                                        </Button>
+                                        <Button x:Name="ModeButton" Style="{StaticResource KeyButton}" Tag="F4" Click="OnLegendClick" Margin="24,0,0,0"
+                                                AutomationProperties.Name="Display mode. Press F4 to switch between Retro and Plain.">
+                                            <TextBlock x:Name="ModeText" Text="MODE: RETRO  [F4]" FontFamily="{DynamicResource TerminalFont}" FontSize="{DynamicResource TextSize}" Foreground="{DynamicResource Phosphor}" />
+                                        </Button>
+                                    </StackPanel>
                                     <TextBlock x:Name="ClockText" Grid.Column="2" Style="{StaticResource Term}" Text="SESSION 00:00:00"
                                                AutomationProperties.Name="Session clock" />
                                 </Grid>
@@ -60,14 +67,14 @@
                                 <Grid Grid.Row="1" Margin="0,8,0,6">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="2*" />
-                                        <ColumnDefinition Width="16" />
-                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition x:Name="ChasmGapColumn" Width="16" />
+                                        <ColumnDefinition x:Name="ChasmColumn" Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <Rectangle Grid.ColumnSpan="3" Height="1" VerticalAlignment="Top" Fill="{DynamicResource Dim}" />
 
                                     <!-- Ledger -->
                                     <DockPanel Grid.Column="0" Margin="0,8,0,0">
-                                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Term}" FontSize="24" Text="SELECT AIRCRAFT TO CLEAR" />
+                                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Term}" FontSize="{DynamicResource TitleSize}" Text="SELECT AIRCRAFT TO PURGE" />
                                         <Grid DockPanel.Dock="Top" Margin="0,4,0,4">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto" />
@@ -79,7 +86,7 @@
                                                      TextChanged="OnFilterChanged" AutomationProperties.Name="Filter aircraft by name" />
                                             <Button Grid.Column="2" Style="{StaticResource KeyButton}" Click="OnSortClick" Margin="12,0,0,0"
                                                     AutomationProperties.Name="Change sort order (F6)">
-                                                <TextBlock x:Name="SortText" Text="SORT: NAME ▲" FontFamily="{StaticResource TerminalFont}" FontSize="20" />
+                                                <TextBlock x:Name="SortText" Text="SORT: NAME ▲" FontFamily="{DynamicResource TerminalFont}" FontSize="{DynamicResource TextSize}" />
                                             </Button>
                                         </Grid>
                                         <!-- Column headings -->
@@ -87,11 +94,11 @@
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="40" />
                                                 <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="78" />
-                                                <ColumnDefinition Width="96" />
+                                                <ColumnDefinition Width="{DynamicResource SizeColumnWidth}" />
+                                                <ColumnDefinition Width="{DynamicResource DateColumnWidth}" />
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="1" Style="{StaticResource TermDim}" Text="TITLE" />
-                                            <TextBlock x:Name="SizeHeading" Grid.Column="2" Style="{StaticResource TermDim}" Text="CACHE" HorizontalAlignment="Right" Margin="0,0,10,0" />
+                                            <TextBlock x:Name="SizeHeading" Grid.Column="2" Style="{StaticResource TermDim}" Text="CACHE" HorizontalAlignment="Right" Margin="0,0,20,0" />
                                             <TextBlock Grid.Column="3" Style="{StaticResource TermDim}" Text="MODIFIED" />
                                         </Grid>
                                         <!-- Running total (FR-6) and status line. -->
@@ -111,7 +118,7 @@
                                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                                      VirtualizingPanel.IsVirtualizing="False"
                                                      KeyboardNavigation.TabNavigation="Once"
-                                                     AutomationProperties.Name="Aircraft list. Space marks an aircraft, Enter clears marked aircraft."
+                                                     AutomationProperties.Name="Aircraft list. Space marks an aircraft, Enter purges marked aircraft."
                                                      PreviewKeyDown="OnLedgerPreviewKeyDown"
                                                      SelectionChanged="OnLedgerSelectionChanged">
                                                 <ListBox.ItemContainerStyle>
@@ -152,17 +159,17 @@
                                                 </ListBox.ItemContainerStyle>
                                                 <ListBox.ItemTemplate>
                                                     <DataTemplate>
-                                                        <StackPanel TextElement.FontFamily="{StaticResource TerminalFont}" TextElement.FontSize="20">
+                                                        <StackPanel TextElement.FontFamily="{DynamicResource TerminalFont}" TextElement.FontSize="{DynamicResource TextSize}">
                                                             <Grid>
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="20" />
                                                                     <ColumnDefinition Width="*" />
-                                                                    <ColumnDefinition Width="78" />
-                                                                    <ColumnDefinition Width="96" />
+                                                                    <ColumnDefinition Width="{DynamicResource SizeColumnWidth}" />
+                                                                    <ColumnDefinition Width="{DynamicResource DateColumnWidth}" />
                                                                 </Grid.ColumnDefinitions>
                                                                 <TextBlock Text="{Binding Marker}" />
                                                                 <TextBlock Grid.Column="1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-                                                                <TextBlock Grid.Column="2" Text="{Binding SizeText}" HorizontalAlignment="Right" Margin="0,0,10,0" />
+                                                                <TextBlock Grid.Column="2" Text="{Binding SizeText}" HorizontalAlignment="Right" Margin="0,0,20,0" />
                                                                 <TextBlock Grid.Column="3" Text="{Binding DateText}" />
                                                             </Grid>
                                                             <ItemsControl ItemsSource="{Binding SubRows}" Margin="20,0,0,0" Focusable="False">
@@ -178,7 +185,7 @@
                                                                 </ItemsControl.Style>
                                                                 <ItemsControl.ItemTemplate>
                                                                     <DataTemplate>
-                                                                        <TextBlock Text="{Binding Text}" Opacity="0.65" FontSize="18" TextTrimming="CharacterEllipsis" />
+                                                                        <TextBlock Text="{Binding Text}" Opacity="0.65" FontSize="{DynamicResource SmallSize}" TextTrimming="CharacterEllipsis" />
                                                                     </DataTemplate>
                                                                 </ItemsControl.ItemTemplate>
                                                             </ItemsControl>
@@ -199,13 +206,13 @@
                                 <StackPanel Grid.Row="2">
                                     <Rectangle Height="1" Fill="{DynamicResource Dim}" Margin="0,0,0,2" />
                                     <WrapPanel x:Name="Legend" HorizontalAlignment="Center">
-                                        <Button Style="{StaticResource KeyButton}" Content="F1 HELP" Tag="F1" Click="OnLegendClick" />
-                                        <Button Style="{StaticResource KeyButton}" Content="F2 INSTALL" Tag="F2" Click="OnLegendClick" />
-                                        <Button Style="{StaticResource KeyButton}" Content="F3 SETTINGS" Tag="F3" Click="OnLegendClick" />
-                                        <Button Style="{StaticResource KeyButton}" Content="F5 RESCAN" Tag="F5" Click="OnLegendClick" />
-                                        <Button Style="{StaticResource KeyButton}" Content="SPACE SELECT" Tag="Space" Click="OnLegendClick" />
-                                        <Button Style="{StaticResource KeyButton}" Content="ENTER CLEAR" Tag="Enter" Click="OnLegendClick" />
-                                        <Button Style="{StaticResource KeyButton}" Content="ESC CANCEL" Tag="Escape" Click="OnLegendClick" />
+                                        <Button Style="{StaticResource LegendButton}" Content="F1: HELP" Tag="F1" Click="OnLegendClick" />
+                                        <Button Style="{StaticResource LegendButton}" Content="F2: INSTALL" Tag="F2" Click="OnLegendClick" />
+                                        <Button Style="{StaticResource LegendButton}" Content="F3: SETTINGS" Tag="F3" Click="OnLegendClick" />
+                                        <Button Style="{StaticResource LegendButton}" Content="F5: RESCAN" Tag="F5" Click="OnLegendClick" />
+                                        <Button Style="{StaticResource LegendButton}" Content="SPACE: SELECT" Tag="Space" Click="OnLegendClick" />
+                                        <Button Style="{StaticResource LegendButton}" Content="ENTER: PURGE" Tag="Enter" Click="OnLegendClick" />
+                                        <Button Style="{StaticResource LegendButton}" Content="ESC: CANCEL" Tag="Escape" Click="OnLegendClick" />
                                     </WrapPanel>
                                 </StackPanel>
 
@@ -221,7 +228,7 @@
                                     </Grid.RowDefinitions>
                                     <StackPanel>
                                         <Border Style="{StaticResource InverseBorder}" HorizontalAlignment="Left">
-                                            <TextBlock x:Name="SheetHeading" Style="{StaticResource InverseText}" FontSize="28" Text="" />
+                                            <TextBlock x:Name="SheetHeading" Style="{StaticResource InverseText}" FontSize="{DynamicResource HeadingSize}" Text="" />
                                         </Border>
                                         <Rectangle Height="1" Fill="{DynamicResource Dim}" Margin="0,6,0,6" />
                                     </StackPanel>
@@ -234,9 +241,33 @@
                                     </StackPanel>
                                 </Grid>
 
+                                <!-- The splash logo: shown briefly at launch. Any key or click skips it. -->
+                                <Grid x:Name="Splash" Background="Transparent" Visibility="Collapsed"
+                                      MouseDown="OnSplashMouseDown" AutomationProperties.Name="WASM Chasm">
+                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock x:Name="SplashWasm" Text="WASM" FontFamily="{DynamicResource TerminalFont}" FontSize="170"
+                                                   Foreground="{DynamicResource Phosphor}" HorizontalAlignment="Center" Margin="0,-30,0,-44" />
+                                        <TextBlock x:Name="SplashChasm" Text="CHASM" FontFamily="{DynamicResource TerminalFont}" FontSize="170"
+                                                   Foreground="{DynamicResource Phosphor}" HorizontalAlignment="Center" Margin="0,0,0,-14" />
+                                        <Canvas Width="380" Height="104" HorizontalAlignment="Center">
+                                            <Path Stroke="{DynamicResource Phosphor}" StrokeThickness="3" StrokeLineJoin="Miter"
+                                                  Data="M 0,2 H 120 L 166,102 H 214 L 260,2 H 380" />
+                                            <Path Stroke="{DynamicResource Phosphor}" StrokeThickness="2" Opacity="0.75" Data="M 129,22 H 251" />
+                                            <Path Stroke="{DynamicResource Phosphor}" StrokeThickness="2" Opacity="0.5" Data="M 140,46 H 240" />
+                                            <Path Stroke="{DynamicResource Phosphor}" StrokeThickness="2" Opacity="0.3" Data="M 151,72 H 229" />
+                                        </Canvas>
+                                        <TextBlock Style="{StaticResource TermDim}" Text="PURGES MSFS 2024 WASM DATA" FontSize="22"
+                                                   HorizontalAlignment="Center" Margin="0,18,0,0" />
+                                    </StackPanel>
+                                </Grid>
+
                                 <!-- Animation layer: rows sliding into the chasm and falling characters. -->
                                 <Canvas x:Name="FxLayer" IsHitTestVisible="False" ClipToBounds="True" />
                             </Grid>
+
+                            <!-- The power-on beam; only visible for the first moment after launch. -->
+                            <Rectangle x:Name="PowerBeam" Fill="#FFE0A0" Visibility="Collapsed" IsHitTestVisible="False"
+                                       RenderTransformOrigin="0.5,0.5" />
 
                             <!-- CRT overlays (hit-test invisible). -->
                             <Rectangle x:Name="ScanlineOverlay" IsHitTestVisible="False">
@@ -292,11 +323,11 @@
                     </Border>
 
                     <!-- Bezel furniture: maker plate and power lamp. Anonymous by design. -->
-                    <TextBlock Text="DATA TERMINAL  MODEL 24" Foreground="#5C564C" FontFamily="{StaticResource TerminalFont}" FontSize="18"
+                    <TextBlock x:Name="MakerPlate" Text="DATA TERMINAL  MODEL 24" Foreground="#5C564C" FontFamily="{DynamicResource TerminalFont}" FontSize="{DynamicResource SmallSize}"
                                HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="60,0,0,16" />
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,60,18">
-                        <TextBlock Text="POWER" Foreground="#5C564C" FontFamily="{StaticResource TerminalFont}" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" />
-                        <Ellipse Width="10" Height="10" Fill="{DynamicResource Phosphor}" Opacity="0.85" />
+                    <StackPanel x:Name="PowerPanel" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,60,18">
+                        <TextBlock Text="POWER" Foreground="#5C564C" FontFamily="{DynamicResource TerminalFont}" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" />
+                        <Ellipse x:Name="PowerLamp" Width="10" Height="10" Fill="{DynamicResource Phosphor}" Opacity="0.85" />
                     </StackPanel>
                 </Grid>
             </Border>

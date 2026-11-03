@@ -40,7 +40,7 @@ Aircraft built for MSFS 2020 use an `MSFS2020` sibling folder instead of `MSFS20
 - Both Steam and Store roots can exist on one machine, including when only one is installed: a Store-only machine had a WASM folder at the Steam path holding only `license.key` and `userinfo.txt` files, with no `UserCfg.opt` beside it. What creates it is unknown.
 - `LocalState` can be a junction to another drive (a Store install moved off C:), so the WASM root's real drive may differ from the one in its path.
 
-**What users lose.** Clearing a work folder wipes the aircraft's settings, and third-party data placed there, which can include licence files. One reported case lost installed navdata plus the user's SimBrief alias and Hoppie ID ([Navigraph forum](https://forum.navigraph.com/t/msfs-2024-pmdg-777-300er-hub-alternates-extraction-path-causes-wasm-crash-and-77w-ident-ends-up-blank/23027)). The UI must say this plainly before deletion.
+**What users lose.** Purging a work folder wipes the aircraft's settings, and third-party data placed there, which can include licence files. One reported case lost installed navdata plus the user's SimBrief alias and Hoppie ID ([Navigraph forum](https://forum.navigraph.com/t/msfs-2024-pmdg-777-300er-hub-alternates-extraction-path-causes-wasm-crash-and-77w-ident-ends-up-blank/23027)). The UI must say this plainly before deletion.
 
 **Friendly names.** Folder names are package IDs (`pmdg-aircraft-77w`). Titles come from each package's `manifest.json`, found under the `InstalledPackagesPath` recorded in `UserCfg.opt`: `%APPDATA%\Microsoft Flight Simulator 2024\UserCfg.opt` (Steam) or `%LOCALAPPDATA%\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\UserCfg.opt` (Store) ([FlyAway Simulation](https://flyawaysimulation.com/ask/answers/msfs-2024-configuration-log-file-locations/)).
 
@@ -48,7 +48,7 @@ Aircraft built for MSFS 2020 use an `MSFS2020` sibling folder instead of `MSFS20
 
 **Discovery**
 
-- FR-1: On launch, detect Steam and Store installs. An install needs both its WASM root and its `UserCfg.opt`; a WASM root alone is not an install and is reachable only by browsing to it. Show which were found; if both, the user picks one (remembered).
+- FR-1: On launch, detect Steam and Store installs. An install needs both its WASM root and its `UserCfg.opt`; a WASM root alone is not an install and is ignored. The WASM folder is always in a known place, so the app offers no way to browse for one. Show which were found; if both, the user picks one (remembered).
 - FR-2: Enumerate every package folder under each sim-version subfolder (`MSFS2024`, `MSFS2020`, any other sibling). Each entry records package ID, sim-version folder, size on disk, last-modified date.
 - FR-3: Resolve a display title from the package's `manifest.json` (Community, Official and StreamedPackages). Entries with no readable title show the package ID. The app does not judge whether a package is still installed: add-on managers link and unlink packages, so that can't be known reliably.
 - FR-4: Entries with the same package ID across sibling folders are grouped as one aircraft, with sub-rows.
@@ -61,17 +61,17 @@ Aircraft built for MSFS 2020 use an `MSFS2020` sibling folder instead of `MSFS20
 **Deletion ("into the chasm")**
 
 - FR-7: Before acting, block if `FlightSimulator2024.exe` is running.
-- FR-8: A confirm step lists every folder to be removed or, for the compiled cache, the folders whose compiled files will go, with the warning for that scope. No silent deletes.
+- FR-8: A confirm step asks plainly how many aircraft to purge, says what will happen, gives the warning for that scope and lists every aircraft by name and size. Full paths appear on the results screen and in the log. No silent deletes.
 - FR-9: Default action moves folders and files to the Windows Recycle Bin. Optional setting: zip a backup to a user-chosen folder first. Permanent delete is off by default.
 - FR-10: Three scopes. **Compiled cache only** (default) removes only the sim-generated compiled files and keeps `work`. **Work folder only** removes the `work` subfolder, for when a developer's support team asks for it. **Whole package folder** removes both. The compiled-cache default assumes the sim rebuilds those files; this has not been tested (see M0).
-- FR-11: A results screen lists each folder as removed, skipped or failed, with the reason.
+- FR-11: A results screen lists each folder as removed, skipped or failed, with the reason. In Retro, a clean purge skips it, since the fall into the chasm is the confirmation, and shows a one-line summary in the status bar. The screen always appears in Plain, for dry runs, when animations are off, and whenever anything was skipped or failed, a link was removed, or a backup was written.
 
 **Safety**
 
 - FR-12: Every target path is canonicalised and must sit inside a detected WASM root. Anything else is refused.
 - FR-13: Never follow reparse points (symlinks, junctions); remove the link, not its target.
 - FR-14: No admin rights required. No network access. No changes outside the WASM roots and the backup folder.
-- FR-15: Dry-run mode shows what would be removed and touches nothing.
+- FR-15: Dry-run mode shows what would be removed, plays the same fall into the chasm, and touches nothing. The rows return after the results screen.
 - FR-16: Append each session to a plain-text log in `%LOCALAPPDATA%\WasmChasm\`.
 
 ## Visual and interaction design
@@ -87,23 +87,29 @@ The app looks like an anonymous late-1970s office terminal: one phosphor colour 
 **Type and copy**
 
 - One monospace bitmap-style face (candidate: an OFL-licensed terminal font, bundled). Uppercase headings, sentence-case body.
-- Copy is dry and procedural, in plain words that non-native English speakers can follow: "SELECT AIRCRAFT TO CLEAR", "DONE. 3 AIRCRAFT CLEARED. 412 MB FREED." Never jokey in the data-loss warning.
+- Copy is dry and procedural, in plain words that non-native English speakers can follow: "SELECT AIRCRAFT TO PURGE", "DONE. 3 AIRCRAFT PURGED. 412 MB FREED." Never jokey in the data-loss warning.
 
 **Layout**
 
 - Header bar: app name, detected install (STEAM or STORE), session clock.
 - Left two-thirds: the aircraft list, one row per aircraft (title, size, date), keyboard navigable, selected rows in inverse video.
-- Right third: the chasm, a narrow vertical pit drawn in line art receding into darkness, with a depth gauge showing the MB marked.
-- Footer: function-key legend (F1 help, F5 rescan, SPACE select, ENTER clear, ESC cancel).
+- Right third: the chasm, a narrow vertical pit drawn in line art receding into darkness, with a depth gauge. The gauge is linear and a full bar means all the data that could be purged, with real sizes at the ticks, so marking everything fills it.
+- Footer: function-key legend (F1 help, F5 rescan, SPACE select, ENTER purge, ESC cancel).
 
-**The clearing moment**
+**The purging moment**
 
 1. User selects rows; each gets a marker and the depth gauge climbs.
-2. ENTER opens a full-screen confirm sheet: the folder list, the warning, and a typed confirmation ("Y") for more than five aircraft.
+2. ENTER opens a full-screen confirm sheet: the question, what will happen, the warning, the aircraft list, and a typed confirmation ("Y") for more than five aircraft.
 3. On confirm, each row detaches from the list, slides right, and drops into the pit, breaking into falling characters. Rows fall one at a time as each folder actually completes, so the animation reports real progress.
 4. Results screen in the same style, with any failures in inverse video.
 
-**Sound (optional, off by default)**: relay click on select, low hum while clearing, single beep on completion.
+**Sound (optional, off by default)**: a gentle retro sci-fi hum while the window is active (it fades out when another window is in front, so it never plays over the sim, and swells while purging), a gradual power-up at launch that fades in from silence, a soft blip on row change, on select a soft ratchet that rises a semitone with each marked aircraft (the gauge shows size, the sound shows count), a retro crumble as each row breaks up, a soft chime on completion. Synthesised at runtime; no audio files ship.
+
+**Retro and Plain modes**: F4 switches between the two at any time from the main list, and the choice is remembered. Everything in this section describes Retro. Plain is the same app for those who don't want the theatre: plain grey, one standard font at one size, and no bezel, chasm, session clock, CRT effects, splash, power-on, animations or sound. The modes differ only in appearance, never in what happens to files.
+
+**Splash**: the logo appears through the power-on effect at launch, for about two seconds: "WASM" and "CHASM" in large striped lettering over a small line-art pit. Any key or click skips it, and it is skipped when Windows animations are off.
+
+**Power-on**: a brief tube warm-up at launch: a bright line grows across the dark screen, opens to full height, and the display flickers on, in under a second. Skipped when CRT effects, high contrast or Windows animations rule it out. It never blocks input.
 
 **Accessibility**: full keyboard operation, CRT effects off switch, Windows high-contrast respected, screen-reader names on every control.
 
@@ -116,8 +122,8 @@ C# on .NET 8, WPF front end, published as a self-contained single-file x64 `.exe
 | Project | Responsibility |
 | --- | --- |
 | `WasmChasm.Core` | Install detection, scanning, name resolution, path guard, deletion. No UI references. |
-| `WasmChasm.App` | WPF shell, CRT renderer, ledger and chasm views, settings. |
-| `WasmChasm.Cli` | Thin console wrapper over Core: `scan`, `clear --dry-run`. Used for M1 and support diagnostics. |
+| `WasmChasm.App` | WPF shell, CRT renderer, list and chasm views, settings. |
+| `WasmChasm.Cli` | Thin console wrapper over Core: `scan`, `purge --dry-run`. Used for M1 and support diagnostics. |
 | `WasmChasm.Tests` | xUnit, against fixture directory trees. |
 
 **Key interfaces in Core**
@@ -136,9 +142,9 @@ All store-specific paths live in a single `locations.json` shipped beside the co
 
 | Case | Behaviour |
 | --- | --- |
-| No install found | Explain both expected roots; offer "Browse for WASM folder" with the path guard anchored to the chosen folder. |
+| No install found | Explain both expected roots; offer to try again or quit. |
 | Both stores installed | Picker on first run; switchable from header. |
-| Sim launches while clearing | Re-check before each folder; stop, report the rest as skipped. |
+| Sim launches while purging | Re-check before each folder; stop, report the rest as skipped. |
 | File locked or access denied | Skip that folder, report it, continue. No retries with elevation. |
 | Recycle Bin disabled or over quota | Fall back to asking: zip backup first, or cancel. Never silently permanent-delete. |
 | Work folder is a junction (Addons Linker and similar) | Remove the link only, flag it in results. |
@@ -156,8 +162,8 @@ All store-specific paths live in a single `locations.json` shipped beside the co
 **Milestones and exit gates**
 
 1. **M0 — Path verification spike.** ProcMon on Steam and Store installs while loading a 2024-native and a 2020-format WASM aircraft. Exit: confirmed `locations.json`; the `Packages\<package>\work\wasm` and `MSFS2024_now_valid` questions answered; confirmed that the sim rebuilds removed compiled files cleanly.
-2. **M1 — Core + CLI.** `scan` and `clear --dry-run` work on both stores. Exit: tests green; output matches manual inspection on two machines.
-3. **M2 — WPF app.** Ledger, chasm, confirm, Recycle Bin disposal, results, CRT renderer. Exit: full manual matrix passes.
+2. **M1 — Core + CLI.** `scan` and `purge --dry-run` work on both stores. Exit: tests green; output matches manual inspection on two machines.
+3. **M2 — WPF app.** List, chasm, confirm, Recycle Bin disposal, results, CRT renderer. Exit: full manual matrix passes.
 4. **M3 — Closed test.** 5–10 testers across both stores. Exit: no data outside WASM roots touched; no open severity-1 issues.
 5. **M4 — Public v1.0.** README with screenshots, release binary, checksum.
 
@@ -180,8 +186,8 @@ README carries a not-affiliated-with-Microsoft-or-Asobo notice and the data-loss
 
 **Open questions**
 
-- [x] Scope: resolved by FR-10. Compiled cache is the default; whole-folder does clear compiled output.
-- [x] One-click "consign all orphans": dropped, along with the library check. Being absent from the library doesn't prove an aircraft is gone: one Store install showed 22 of 43 packages that way, including aircraft the owner still has.
+- [x] Scope: resolved by FR-10. Compiled cache is the default; whole-folder does remove compiled output.
+- [x] One-click "mark all orphans": dropped, along with the library check. Being absent from the library doesn't prove an aircraft is gone: one Store install showed 22 of 43 packages that way, including aircraft the owner still has.
 - [ ] Code signing: pay for a certificate, or accept SmartScreen warnings for a free tool?
 - [ ] Font choice and its licence.
 - [ ] Phosphor colour: amber, or offer green as an alternate theme?

@@ -3,11 +3,18 @@ using System.Text.Json.Serialization;
 
 namespace WasmChasm.Core;
 
+/// <summary>How the app looks and sounds. What it does to files is the same in both.</summary>
+public enum AppMode
+{
+    Retro,
+    Plain,
+}
+
 /// <summary>User preferences, stored as JSON in %LOCALAPPDATA%\WasmChasm\settings.json.</summary>
 public sealed class AppSettings
 {
     public string? PreferredStoreId { get; set; }
-    public string? CustomWasmRoot { get; set; }
+    public AppMode Mode { get; set; } = AppMode.Retro;
     public bool CrtEffects { get; set; } = true;
     public bool Sound { get; set; }
     public DisposalMode DisposalMode { get; set; } = DisposalMode.RecycleBin;

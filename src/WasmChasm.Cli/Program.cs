@@ -3,7 +3,7 @@ using WasmChasm.Core;
 
 namespace WasmChasm.Cli;
 
-/// <summary>Thin console wrapper over Core: <c>scan</c> and <c>clear</c> (dry run by default for support use).</summary>
+/// <summary>Thin console wrapper over Core: <c>scan</c> and <c>purge</c> (dry run by default for support use).</summary>
 public static class Program
 {
     private const string Usage = """
@@ -11,13 +11,13 @@ public static class Program
 
         USAGE
           wasmchasm scan    [--store steam|store] [--root <WASM folder>] [--json]
-          wasmchasm clear <package-id>... [--store steam|store] [--root <WASM folder>]
+          wasmchasm purge <package-id>... [--store steam|store] [--root <WASM folder>]
                           [--dry-run] [--scope compiled|work|package] [--include-unknown]
                           [--mode recycle|zip|permanent] [--backup <folder>] [--yes]
           wasmchasm stores
           wasmchasm --help
 
-        clear without --yes is always a dry run. The default scope is compiled: settings in the work
+        purge without --yes is always a dry run. The default scope is compiled: settings in the work
         folder are kept. Nothing outside the WASM root is ever touched.
         Not affiliated with Microsoft or Asobo Studio.
         """;
@@ -49,7 +49,7 @@ public static class Program
         {
             "stores" => Stores(config, stdout),
             "scan" => Scan(config, opts, stdout),
-            "clear" => Clear(config, opts, stdout),
+            "purge" => Purge(config, opts, stdout),
             _ => throw new CliException($"Unknown command '{args[0]}'. Try --help."),
         };
     }
@@ -151,7 +151,7 @@ public static class Program
         return 0;
     }
 
-    private static int Clear(LocationsConfig config, CliOptions opts, TextWriter o)
+    private static int Purge(LocationsConfig config, CliOptions opts, TextWriter o)
     {
         if (opts.Packages.Count == 0) throw new CliException("Name at least one package ID.");
         var install = ResolveInstall(config, opts);
@@ -187,7 +187,7 @@ public static class Program
             return 4;
         }
 
-        o.WriteLine(dryRun ? "DRY RUN - NOTHING WILL BE TOUCHED." : "CLEARING.");
+        o.WriteLine(dryRun ? "DRY RUN - NOTHING WILL BE TOUCHED." : "PURGING.");
         o.WriteLine($"SCOPE: {ScopeText.Name(opts.Scope)}");
         o.WriteLine("WARNING: " + ScopeText.Warning(opts.Scope));
 
@@ -204,7 +204,7 @@ public static class Program
 
     private static string OutcomeLabel(ConsignOutcome o) => o switch
     {
-        ConsignOutcome.WouldRemove => "WOULD-CLEAR",
+        ConsignOutcome.WouldRemove => "WOULD-PURGE",
         _ => o.ToString().ToUpperInvariant(),
     };
 

@@ -1,110 +1,175 @@
-using System.IO;
-using System.Media;
+using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
+using WasmChasm.Core;
 
 namespace WasmChasm.App.Services;
 
 /// <summary>
-/// Optional sounds (off by default), synthesised at runtime so no audio assets ship:
-/// relay click on select, low hum during consign, single beep on completion.
+/// Optional sounds (off by default), mixed so they can overlap: a gentle hum while the window is active that
+/// swells while purging, a gradual power-up at launch, a blip on row change, a rising ratchet on select, a retro crumble as a row breaks up, a soft chime on completion.
+/// Audio is cosmetic: if there is no working device, the app simply stays silent.
 /// </summary>
 public sealed class SoundBank : IDisposable
 {
-    private const int Rate = 22050;
-    private readonly SoundPlayer _click;
-    private readonly SoundPlayer _hum;
-    private readonly SoundPlayer _beep;
+    private static readonly WaveFormat Format = WaveFormat.CreateIeeeFloatWaveFormat(SoundSynth.Rate, 1);
+    private const float IdleHumLevel = 0.6f;
+    private const long MinTickGapMs = 45;
 
-    public bool Enabled { get; set; }
+    private readonly float[] _click = SoundSynth.Click();
+    private readonly float[] _tick = SoundSynth.Tick();
+    private readonly float[][] _ratchet = Enumerable.Range(0, SoundSynth.RatchetTopCount + 1).Select(SoundSynth.Ratchet).ToArray();
+    private readonly float[] _chime = SoundSynth.Chime();
+    private readonly float[] _disintegrate = SoundSynth.Disintegrate();
+    private readonly float[] _powerOn = SoundSynth.PowerOn();
+    private readonly LoopVoice _hum = new(SoundSynth.AmbientHum(), fadeSeconds: 2.5);
+    private readonly MixingSampleProvider _mixer = new(Format) { ReadFully = true };
+    private WaveOutEvent? _output;
+    private bool _enabled;
+    private bool _windowActive = true;
+    private bool _purging;
+    private long _lastTick;
 
     public SoundBank()
     {
-        _click = Make(Click());
-        _hum = Make(Hum());
-        _beep = Make(Beep());
+        _mixer.AddMixerInput(_hum);
     }
 
-    public void PlayClick() { if (Enabled) Safe(() => _click.Play()); }
-    public void StartHum() { if (Enabled) Safe(() => _hum.PlayLooping()); }
-    public void StopHum() => Safe(() => _hum.Stop());
-    public void PlayBeep() { if (Enabled) Safe(() => _beep.Play()); }
+    public bool Enabled
+    {
+        get => _enabled;
+        set
+        {
+            _enabled = value;
+            UpdateHum();
+            Safe(() =>
+            {
+                if (value)
+                {
+                    if (_output is null)
+                    {
+                        _output = new WaveOutEvent { DesiredLatency = 120 };
+                        _output.Init(_mixer);
+                    }
+
+                    _output.Play();
+                }
+                else
+                {
+                    _output?.Stop();
+                }
+            });
+        }
+    }
+
+    /// <summary>The hum fades out while another window is active, so it never plays over the sim.</summary>
+    public bool WindowActive
+    {
+        get => _windowActive;
+        set
+        {
+            _windowActive = value;
+            UpdateHum();
+        }
+    }
+
+    public void PlayClick() => Play(_click);
+    public void PlayChime() => Play(_chime);
+    public void PlayDisintegrate() => Play(_disintegrate);
+    public void PlayPowerOn() => Play(_powerOn);
+
+    /// <summary>One ratchet tooth for this many marked aircraft: each one raises the pitch a step.</summary>
+    public void PlayRatchet(int markedCount) => Play(_ratchet[Math.Clamp(markedCount, 0, SoundSynth.RatchetTopCount)]);
+
+    /// <summary>Soft blip for moving between rows. Holding an arrow key repeats fast, so it is rate-limited.</summary>
+    public void PlayTick()
+    {
+        long now = Environment.TickCount64;
+        if (now - _lastTick < MinTickGapMs) return;
+        _lastTick = now;
+        Play(_tick);
+    }
+
+    /// <summary>The hum swells while purging, even if the window is in the background.</summary>
+    public void StartHum()
+    {
+        _purging = true;
+        UpdateHum();
+    }
+
+    public void StopHum()
+    {
+        _purging = false;
+        UpdateHum();
+    }
+
+    private void UpdateHum() => _hum.Level = !_enabled ? 0 : _purging ? 1 : _windowActive ? IdleHumLevel : 0;
+
+    private void Play(float[] samples)
+    {
+        if (_enabled) Safe(() => _mixer.AddMixerInput(new OneShotVoice(samples)));
+    }
 
     private static void Safe(Action a)
     {
         try { a(); } catch { /* audio is cosmetic */ }
     }
 
-    private static short[] Click()
-    {
-        var rng = new Random(7);
-        var s = new short[Rate / 40];
-        for (int i = 0; i < s.Length; i++)
-        {
-            double env = Math.Exp(-i / (Rate * 0.002));
-            s[i] = (short)((rng.NextDouble() * 2 - 1) * env * 14000);
-        }
-
-        return s;
-    }
-
-    private static short[] Hum()
-    {
-        // One second of 60 Hz + harmonics; loops seamlessly because 60 divides the sample count.
-        var s = new short[Rate];
-        for (int i = 0; i < s.Length; i++)
-        {
-            double t = (double)i / Rate;
-            double v = 0.6 * Math.Sin(2 * Math.PI * 60 * t) + 0.25 * Math.Sin(2 * Math.PI * 120 * t) + 0.1 * Math.Sin(2 * Math.PI * 180 * t);
-            s[i] = (short)(v * 3500);
-        }
-
-        return s;
-    }
-
-    private static short[] Beep()
-    {
-        var s = new short[Rate / 5];
-        for (int i = 0; i < s.Length; i++)
-        {
-            double t = (double)i / Rate;
-            double env = Math.Min(1, Math.Min(i / 200.0, (s.Length - i) / 200.0));
-            s[i] = (short)(Math.Sign(Math.Sin(2 * Math.PI * 880 * t)) * env * 6000);
-        }
-
-        return s;
-    }
-
-    private static SoundPlayer Make(short[] samples)
-    {
-        var ms = new MemoryStream();
-        using (var w = new BinaryWriter(ms, System.Text.Encoding.ASCII, leaveOpen: true))
-        {
-            int dataBytes = samples.Length * 2;
-            w.Write("RIFF"u8.ToArray());
-            w.Write(36 + dataBytes);
-            w.Write("WAVE"u8.ToArray());
-            w.Write("fmt "u8.ToArray());
-            w.Write(16);
-            w.Write((short)1);
-            w.Write((short)1);
-            w.Write(Rate);
-            w.Write(Rate * 2);
-            w.Write((short)2);
-            w.Write((short)16);
-            w.Write("data"u8.ToArray());
-            w.Write(dataBytes);
-            foreach (var x in samples) w.Write(x);
-        }
-
-        ms.Position = 0;
-        var player = new SoundPlayer(ms);
-        try { player.Load(); } catch { /* ignore */ }
-        return player;
-    }
-
     public void Dispose()
     {
-        _click.Dispose();
-        _hum.Dispose();
-        _beep.Dispose();
+        Safe(() =>
+        {
+            _output?.Stop();
+            _output?.Dispose();
+        });
+    }
+
+    /// <summary>Plays once, then ends, which removes it from the mixer.</summary>
+    private sealed class OneShotVoice : ISampleProvider
+    {
+        private readonly float[] _samples;
+        private int _position;
+
+        public OneShotVoice(float[] samples) => _samples = samples;
+        public WaveFormat WaveFormat => Format;
+
+        public int Read(float[] buffer, int offset, int count)
+        {
+            int n = Math.Min(count, _samples.Length - _position);
+            Array.Copy(_samples, _position, buffer, offset, n);
+            _position += n;
+            return n;
+        }
+    }
+
+    /// <summary>Loops forever, fading in and out on request so it never pops. The mixer keeps it for the app's life.</summary>
+    private sealed class LoopVoice : ISampleProvider
+    {
+        private readonly float[] _samples;
+        private readonly float _step;
+        private int _position;
+        private float _gain;
+        private volatile float _target;
+
+        public LoopVoice(float[] samples, double fadeSeconds)
+        {
+            _samples = samples;
+            _step = (float)(1 / (fadeSeconds * SoundSynth.Rate));
+        }
+
+        public float Level { set => _target = value; }
+        public WaveFormat WaveFormat => Format;
+
+        public int Read(float[] buffer, int offset, int count)
+        {
+            float target = _target;
+            for (int i = 0; i < count; i++)
+            {
+                _gain = _gain < target ? Math.Min(target, _gain + _step) : Math.Max(target, _gain - _step);
+                buffer[offset + i] = _samples[_position] * _gain;
+                _position = (_position + 1) % _samples.Length;
+            }
+
+            return count;
+        }
     }
 }

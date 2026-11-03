@@ -257,8 +257,8 @@ public class CliTests
         Assert.Contains("\"packageId\": \"pmdg-aircraft-77w\"", o.ToString());
 
         o = new StringWriter();
-        Assert.Equal(0, WasmChasm.Cli.Program.Run(new[] { "clear", "pmdg-aircraft-77w", "--root", f.WasmRoot, "--dry-run", "--scope", "work" }, o, o, f.Config));
-        Assert.Contains("DRY RUN DONE. 1 AIRCRAFT WOULD BE CLEARED", o.ToString());
+        Assert.Equal(0, WasmChasm.Cli.Program.Run(new[] { "purge", "pmdg-aircraft-77w", "--root", f.WasmRoot, "--dry-run", "--scope", "work" }, o, o, f.Config));
+        Assert.Contains("DRY RUN DONE. 1 AIRCRAFT WOULD BE PURGED", o.ToString());
         Assert.True(Directory.Exists(Path.Combine(pkg, "work")));
     }
 
@@ -268,7 +268,7 @@ public class CliTests
         using var f = new Fixture();
         var pkg = f.AddWasm("MSFS2024", "a");
         var o = new StringWriter();
-        WasmChasm.Cli.Program.Run(new[] { "clear", "a", "--root", f.WasmRoot, "--mode", "permanent", "--scope", "work" }, o, o, f.Config);
+        WasmChasm.Cli.Program.Run(new[] { "purge", "a", "--root", f.WasmRoot, "--mode", "permanent", "--scope", "work" }, o, o, f.Config);
         Assert.True(Directory.Exists(Path.Combine(pkg, "work")));
         Assert.Contains("DRY RUN", o.ToString());
     }

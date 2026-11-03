@@ -1,6 +1,7 @@
 <Application x:Class="WasmChasm.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
              ShutdownMode="OnMainWindowClose">
     <Application.Resources>
         <!-- Palette. Single amber phosphor; brushes are swapped at runtime for Windows high contrast. -->
@@ -13,9 +14,20 @@
 
         <FontFamily x:Key="TerminalFont">pack://application:,,,/Fonts/#VT323</FontFamily>
 
+        <!-- Text sizes and footer spacing. Plain mode sets every size to the same value. -->
+        <sys:Double x:Key="TextSize">20</sys:Double>
+        <sys:Double x:Key="SmallSize">18</sys:Double>
+        <sys:Double x:Key="TitleSize">24</sys:Double>
+        <sys:Double x:Key="HeadingSize">28</sys:Double>
+        <Thickness x:Key="LegendMargin">8,0</Thickness>
+
+        <!-- List columns; Plain mode's font is wider, so it swaps these. -->
+        <GridLength x:Key="SizeColumnWidth">104</GridLength>
+        <GridLength x:Key="DateColumnWidth">96</GridLength>
+
         <Style x:Key="Term" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="{StaticResource TerminalFont}" />
-            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontFamily" Value="{DynamicResource TerminalFont}" />
+            <Setter Property="FontSize" Value="{DynamicResource TextSize}" />
             <Setter Property="Foreground" Value="{DynamicResource Phosphor}" />
             <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
         </Style>
@@ -23,7 +35,7 @@
             <Setter Property="Foreground" Value="{DynamicResource Dim}" />
         </Style>
         <Style x:Key="TermHeading" TargetType="TextBlock" BasedOn="{StaticResource Term}">
-            <Setter Property="FontSize" Value="28" />
+            <Setter Property="FontSize" Value="{DynamicResource HeadingSize}" />
         </Style>
 
         <!-- Blinking: used for the cursor and warning headings. -->
@@ -53,8 +65,8 @@
         <!-- Text-only button used for the function-key legend and header switches. -->
         <Style x:Key="KeyButton" TargetType="Button">
             <Setter Property="Foreground" Value="{DynamicResource Phosphor}" />
-            <Setter Property="FontFamily" Value="{StaticResource TerminalFont}" />
-            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontFamily" Value="{DynamicResource TerminalFont}" />
+            <Setter Property="FontSize" Value="{DynamicResource TextSize}" />
             <Setter Property="Focusable" Value="False" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
@@ -74,9 +86,13 @@
             </Setter>
         </Style>
 
+        <Style x:Key="LegendButton" TargetType="Button" BasedOn="{StaticResource KeyButton}">
+            <Setter Property="Margin" Value="{DynamicResource LegendMargin}" />
+        </Style>
+
         <Style x:Key="TermTextBox" TargetType="TextBox">
-            <Setter Property="FontFamily" Value="{StaticResource TerminalFont}" />
-            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontFamily" Value="{DynamicResource TerminalFont}" />
+            <Setter Property="FontSize" Value="{DynamicResource TextSize}" />
             <Setter Property="Foreground" Value="{DynamicResource Phosphor}" />
             <Setter Property="CaretBrush" Value="{DynamicResource Phosphor}" />
             <Setter Property="SelectionBrush" Value="{DynamicResource Phosphor}" />

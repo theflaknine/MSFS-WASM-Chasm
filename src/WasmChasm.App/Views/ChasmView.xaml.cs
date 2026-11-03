@@ -1,18 +1,17 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using WasmChasm.Core;
 
 namespace WasmChasm.App.Views;
 
-/// <summary>A narrow vertical pit in line art receding into darkness, with a depth gauge of MB queued.</summary>
+/// <summary>A narrow vertical pit in line art receding into darkness, with a depth gauge of the data marked.</summary>
 public partial class ChasmView : UserControl
 {
-    /// <summary>Gauge full scale: 10 GB, logarithmic so small selections still register.</summary>
-    private const double FullScaleMb = 10240;
-
-    private long _queuedBytes;
+    private long _markedBytes;
+    private long _totalBytes;
     private Rectangle? _gaugeFill;
 
     public ChasmView()
@@ -20,15 +19,18 @@ public partial class ChasmView : UserControl
         InitializeComponent();
     }
 
-    public long QueuedBytes
+    /// <summary>How full the gauge is, from 0 to 1.</summary>
+    public double GaugeFill => GaugeScale.Fill(_markedBytes, _totalBytes);
+
+    /// <summary>Sets the data marked and the total that a full gauge represents.</summary>
+    public void SetLevels(long markedBytes, long totalBytes)
     {
-        get => _queuedBytes;
-        set
-        {
-            _queuedBytes = Math.Max(0, value);
-            DepthText.Text = ByteFormat.Megabytes(_queuedBytes) + " MARKED";
-            UpdateGauge();
-        }
+        bool scaleChanged = totalBytes != _totalBytes;
+        _markedBytes = Math.Max(0, markedBytes);
+        _totalBytes = Math.Max(0, totalBytes);
+        DepthText.Text = $"{ByteFormat.Format(_markedBytes)} OF {ByteFormat.Format(_totalBytes)} MARKED";
+        if (scaleChanged) DrawGauge();
+        else UpdateGauge();
     }
 
     /// <summary>Centre of the pit's mouth, in this control's coordinates.</summary>
@@ -51,6 +53,32 @@ public partial class ChasmView : UserControl
 
     private Brush Phosphor => (Brush)FindResource("Phosphor");
     private Brush Dim => (Brush)FindResource("Dim");
+
+    /// <summary>
+    /// A slow breath with one brief flicker in each cycle. It stops with the CRT effects and when Windows
+    /// animations are off, leaving a steady label for anyone who needs that.
+    /// </summary>
+    public void AnimateTitle(bool on)
+    {
+        if (!on || !SystemParameters.ClientAreaAnimation)
+        {
+            ChasmTitle.BeginAnimation(OpacityProperty, null);
+            return;
+        }
+
+        var breath = new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever };
+        void Add(double seconds, double value) =>
+            breath.KeyFrames.Add(new LinearDoubleKeyFrame(value, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(seconds))));
+
+        Add(0, 0.4);
+        Add(3.0, 0.95);
+        Add(3.6, 0.95);
+        Add(3.7, 0.55);
+        Add(3.8, 0.95);
+        Add(6.5, 0.4);
+        Add(8.0, 0.4);
+        ChasmTitle.BeginAnimation(OpacityProperty, breath);
+    }
 
     /// <summary>Redraws with the current palette (e.g. after a high-contrast change).</summary>
     public void Redraw()
@@ -168,11 +196,10 @@ public partial class ChasmView : UserControl
         Canvas.SetLeft(frame, barX);
         Gauge.Children.Add(frame);
 
-        // Ticks with labels: 0, 10 MB, 100 MB, 1 GB, 10 GB (log scale), depth increasing downward.
-        (double mb, string label)[] marks = { (0, "0"), (10, "10M"), (100, "100M"), (1024, "1G"), (10240, "10G") };
-        foreach (var (mb, label) in marks)
+        // Ticks with real sizes, depth increasing downward.
+        foreach (var (position, label) in GaugeScale.Ticks(_totalBytes))
         {
-            double y = Fraction(mb) * h;
+            double y = position * h;
             var tick = new Line { X1 = barX + barW, X2 = barX + barW + 5, Y1 = y, Y2 = y, Stroke = Dim, StrokeThickness = 1 };
             Gauge.Children.Add(tick);
             var text = new TextBlock { Text = label, Style = (Style)FindResource("TermDim"), FontSize = 14 };
@@ -188,14 +215,10 @@ public partial class ChasmView : UserControl
         UpdateGauge();
     }
 
-    private static double Fraction(double mb) =>
-        Math.Clamp(Math.Log10(1 + mb) / Math.Log10(1 + FullScaleMb), 0, 1);
-
     private void UpdateGauge()
     {
         if (_gaugeFill is null) return;
         double h = Gauge.ActualHeight;
-        double mb = _queuedBytes / (1024d * 1024d);
-        _gaugeFill.Height = Math.Max(0, Fraction(mb) * (h - 4));
+        _gaugeFill.Height = Math.Max(0, GaugeFill * (h - 4));
     }
 }

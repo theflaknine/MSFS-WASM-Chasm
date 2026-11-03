@@ -5,6 +5,7 @@
     <AssemblyName>wasmchasm</AssemblyName>
     <RootNamespace>WasmChasm.Cli</RootNamespace>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <ApplicationIcon>..\WasmChasm.App\Assets\WasmChasm.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\WasmChasm.Core\WasmChasm.Core.csproj" />

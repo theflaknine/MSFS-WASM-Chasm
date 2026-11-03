@@ -242,11 +242,73 @@ public class CompiledScopeTests
         var pkg = AddPackageWithCache(f);
         var o = new StringWriter();
 
-        Assert.Equal(0, WasmChasm.Cli.Program.Run(new[] { "clear", "pmdg-aircraft-dc6", "--root", f.WasmRoot, "--dry-run" }, o, o, f.Config));
+        Assert.Equal(0, WasmChasm.Cli.Program.Run(new[] { "purge", "pmdg-aircraft-dc6", "--root", f.WasmRoot, "--dry-run" }, o, o, f.Config));
 
         Assert.Contains("COMPILED CACHE ONLY", o.ToString());
         Assert.Contains("work folder kept", o.ToString());
         Assert.All(Fixture.CompiledNames, n => Assert.True(File.Exists(Path.Combine(pkg, n))));
+    }
+}
+
+public class ResultsPageTests
+{
+    private static readonly ConsignTarget Target = new("a", "A", "MSFS2024", "target", 10);
+
+    [Fact]
+    public void A_clean_purge_needs_no_page()
+    {
+        var results = new[] { new ConsignResult(Target, ConsignOutcome.Removed, "ok"), new ConsignResult(Target, ConsignOutcome.Removed, "ok") };
+        Assert.False(ScopeText.NeedsResultsPage(results));
+    }
+
+    [Theory]
+    [InlineData(ConsignOutcome.Failed)]
+    [InlineData(ConsignOutcome.Skipped)]
+    [InlineData(ConsignOutcome.WouldRemove)]
+    public void Anything_but_a_clean_removal_needs_the_page(ConsignOutcome outcome)
+    {
+        var results = new[] { new ConsignResult(Target, ConsignOutcome.Removed, "ok"), new ConsignResult(Target, outcome, "why") };
+        Assert.True(ScopeText.NeedsResultsPage(results));
+    }
+
+    [Fact]
+    public void A_removed_link_needs_the_page()
+    {
+        Assert.True(ScopeText.NeedsResultsPage(new[] { new ConsignResult(Target, ConsignOutcome.Removed, "ok", LinkOnly: true) }));
+    }
+
+    [Fact]
+    public void A_backup_needs_the_page_so_its_location_is_shown()
+    {
+        Assert.True(ScopeText.NeedsResultsPage(new[] { new ConsignResult(Target, ConsignOutcome.Removed, "ok", BackupPath: "backup.zip") }));
+    }
+}
+
+public class ModeSettingTests
+{
+    [Fact]
+    public void Retro_is_the_default_and_the_choice_is_remembered()
+    {
+        using var f = new Fixture();
+        var path = Path.Combine(f.Base, "settings.json");
+        Assert.Equal(AppMode.Retro, AppSettings.Load(path).Mode);
+
+        new AppSettings { Mode = AppMode.Plain }.Save(path);
+
+        Assert.Equal(AppMode.Plain, AppSettings.Load(path).Mode);
+    }
+
+    [Fact]
+    public void Older_settings_without_a_mode_load_as_retro()
+    {
+        using var f = new Fixture();
+        var path = Path.Combine(f.Base, "settings.json");
+        File.WriteAllText(path, "{ \"Sound\": true }");
+
+        var s = AppSettings.Load(path);
+
+        Assert.Equal(AppMode.Retro, s.Mode);
+        Assert.True(s.Sound);
     }
 }
 
@@ -334,7 +396,7 @@ public class LibraryLookupTests
         var results = svc.Execute(targets, new PermanentStrategy(), options);
 
         Assert.Equal(2, results.Count);
-        Assert.StartsWith("DRY RUN DONE. 1 AIRCRAFT WOULD BE CLEARED.", ScopeText.Summary(results, dryRun: true));
+        Assert.StartsWith("DRY RUN DONE. 1 AIRCRAFT WOULD BE PURGED.", ScopeText.Summary(results, dryRun: true));
     }
 
     [Fact]

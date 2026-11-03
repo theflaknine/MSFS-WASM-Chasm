@@ -29,7 +29,7 @@ public sealed class AircraftRow : ObservableObject
     public string SizeText => ByteFormat.Format(ScopedBytes);
 
     /// <summary>Show sub-rows when there's more than one folder or any is unusual.</summary>
-    public bool ShowSubRows => SubRows.Count > 1 || SubRows.Any(s => !s.Entry.IsKnownSimVersion || s.Entry.WorkIsReparsePoint || !s.Entry.HasContentFor(_scope));
+    public bool ShowSubRows => SubRows.Count > 1 || SubRows.Any(s => !s.Entry.IsKnownSimVersion || s.Entry.WorkIsReparsePoint);
 
     public DeletionScope Scope
     {
@@ -39,7 +39,6 @@ public sealed class AircraftRow : ObservableObject
             if (!Set(ref _scope, value)) return;
             Raise(nameof(ScopedBytes));
             Raise(nameof(SizeText));
-            Raise(nameof(ShowSubRows));
             foreach (var s in SubRows) s.Refresh();
         }
     }
@@ -49,7 +48,9 @@ public sealed class AircraftRow : ObservableObject
         get => _isMarked;
         set
         {
-            if (Set(ref _isMarked, value)) Raise(nameof(Marker));
+            if (!Set(ref _isMarked, value)) return;
+            Raise(nameof(Marker));
+            Raise(nameof(AccessibleName));
         }
     }
 
@@ -86,7 +87,6 @@ public sealed class SubRow : ObservableObject
             var flags = new List<string>();
             if (!Entry.IsKnownSimVersion) flags.Add("UNKNOWN FOLDER, NOT INCLUDED");
             if (Entry.WorkIsReparsePoint) flags.Add("LINK");
-            if (!Entry.HasContentFor(_owner.Scope)) flags.Add(ScopeText.NothingToRemove(_owner.Scope));
             return $"  └ {Entry.SimVersionFolder}  {ByteFormat.Format(bytes)}" + (flags.Count > 0 ? "  [" + string.Join("; ", flags) + "]" : "");
         }
     }

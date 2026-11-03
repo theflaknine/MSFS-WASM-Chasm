@@ -48,11 +48,14 @@ public partial class MainWindow : Window
         InitializeComponent();
         _config = LoadConfig();
         _settings = AppSettings.Load();
-        _sound.Enabled = _settings.Sound;
+        ApplyMode();
+        Activated += (_, _) => _sound.WindowActive = true;
+        Deactivated += (_, _) => _sound.WindowActive = false;
 
         _view = CollectionViewSource.GetDefaultView(_rows);
         _view.Filter = FilterRow;
         Ledger.ItemsSource = _view;
+        Ledger.AddHandler(Keyboard.GotKeyboardFocusEvent, new KeyboardFocusChangedEventHandler(OnLedgerFocusChanged));
         ApplySort();
 
         _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -83,6 +86,8 @@ public partial class MainWindow : Window
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         ApplyCrt();
+        if (!IsPlain) PreparePowerOn();
+        if (!IsPlain) PrepareSplash();
         _log.Write($"APP START v{typeof(MainWindow).Assembly.GetName().Version}");
         DetectAndChoose();
     }
@@ -92,13 +97,6 @@ public partial class MainWindow : Window
     private void DetectAndChoose()
     {
         _detected = InstallDetection.DetectAll(InstallDetection.CreateLocators(_config));
-        var custom = SavedCustomInstall();
-
-        if (_settings.PreferredStoreId == InstallLocation.CustomStoreId && custom is not null)
-        {
-            UseInstall(custom);
-            return;
-        }
 
         var preferred = _detected.FirstOrDefault(d => d.StoreId == _settings.PreferredStoreId);
         if (preferred is not null)
@@ -109,9 +107,6 @@ public partial class MainWindow : Window
 
         switch (_detected.Count)
         {
-            case 0 when custom is not null:
-                UseInstall(custom);
-                break;
             case 0:
                 ShowNoInstall();
                 break;
@@ -124,18 +119,10 @@ public partial class MainWindow : Window
         }
     }
 
-    private InstallLocation? SavedCustomInstall()
-    {
-        var root = _settings.CustomWasmRoot;
-        if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return null;
-        return InstallLocation.Custom(root) with { UserCfgPath = UserCfgDiscovery.FindAny(_config) };
-    }
-
     private void UseInstall(InstallLocation install)
     {
         _install = install;
         _settings.PreferredStoreId = install.StoreId;
-        if (install.IsCustom) _settings.CustomWasmRoot = install.WasmRoot;
         _settings.Save();
         InstallText.Text = $"INSTALL: {install.Label}  [F2]";
         _log.Write($"INSTALL {install.StoreId} root={install.WasmRoot} usercfg={install.UserCfgPath ?? "-"}");
@@ -167,7 +154,7 @@ public partial class MainWindow : Window
             UpdateTotals();
             SizeHeading.Text = ScopeText.ColumnHeading(_settings.Scope);
 
-            var status = $"{groups.Count} AIRCRAFT FOUND. {ByteFormat.Format(groups.Sum(x => x.ScopedSize(_settings.Scope)))} CAN BE CLEARED.";
+            var status = $"{groups.Count} AIRCRAFT FOUND. {ByteFormat.Format(groups.Sum(x => x.ScopedSize(_settings.Scope)))} CAN BE PURGED.";
             if (!titles) status += " NAMES UNAVAILABLE (USERCFG.OPT NOT FOUND).";
             if (groups.Count > 0 && !groups.SelectMany(x => x.Entries).Any(en => en.IsKnownSimVersion))
                 status += " NO MSFS2024 OR MSFS2020 FOLDER FOUND.";
@@ -249,21 +236,31 @@ public partial class MainWindow : Window
         int hidden = marked.Count(r => !_view.Filter(r));
         TotalText.Text = $"{marked.Count} MARKED. {ByteFormat.Megabytes(bytes)}." +
                          (hidden > 0 ? $" ({hidden} HIDDEN BY FILTER)" : "");
-        Chasm.QueuedBytes = bytes;
+        Chasm.SetLevels(bytes, _rows.Sum(r => r.ScopedBytes));
     }
 
     private void OnLedgerSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (e.AddedItems.Count + e.RemovedItems.Count > 0 && !_consigning) _sound.PlayClick();
         UpdateTotals();
+        if (e.AddedItems.Count + e.RemovedItems.Count > 0 && !_consigning && !_bulkMarking) _sound.PlayRatchet(MarkedCount);
+    }
+
+    /// <summary>Row to row only, so returning from a screen or the filter box stays silent.</summary>
+    private void OnLedgerFocusChanged(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (!_consigning && e.OldFocus is ListBoxItem && e.NewFocus is ListBoxItem && !ReferenceEquals(e.OldFocus, e.NewFocus))
+            _sound.PlayTick();
     }
 
     private void OnLedgerPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Space && Keyboard.FocusedElement is ListBoxItem item)
+        if (Keyboard.FocusedElement is not ListBoxItem item) return;
+
+        switch (e.Key)
         {
-            item.IsSelected = !item.IsSelected;
-            e.Handled = true;
+            case Key.Space: item.IsSelected = !item.IsSelected; e.Handled = true; break;
+            case Key.Right: item.IsSelected = true; e.Handled = true; break;
+            case Key.Left: item.IsSelected = false; e.Handled = true; break;
         }
     }
 
@@ -286,16 +283,31 @@ public partial class MainWindow : Window
         });
     }
 
+    private bool _bulkMarking;
+
+    private int MarkedCount => _rows.Count(r => r.IsMarked && !r.IsDetached);
+
     private void SetMarks(Func<AircraftRow, bool> predicate, bool value)
     {
+        // One tooth at the final level, not a burst of them.
+        _bulkMarking = true;
         foreach (var r in _rows.Where(r => !r.IsDetached && predicate(r))) r.IsMarked = value;
+        _bulkMarking = false;
         UpdateTotals();
+        _sound.PlayRatchet(MarkedCount);
     }
 
     // ───────────────────────────── Keyboard ─────────────────────────────
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (_splashUp)
+        {
+            DismissSplash();
+            e.Handled = true;
+            return;
+        }
+
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         if (HandleKey(key, Keyboard.Modifiers)) e.Handled = true;
         else if (Sheet.Visibility == Visibility.Visible && Keyboard.FocusedElement is not TextBox) e.Handled = true;
@@ -331,6 +343,13 @@ public partial class MainWindow : Window
 
         if (Sheet.Visibility == Visibility.Visible)
             return _sheetKeys?.Invoke(key) ?? false;
+
+        // Only appearance changes, so this is safe during a scan. Alt+F4 must still close the window.
+        if (key == Key.F4 && (mods & ModifierKeys.Alt) == 0)
+        {
+            ToggleMode();
+            return true;
+        }
 
         if (_scanning) return true;
 
@@ -408,10 +427,11 @@ public partial class MainWindow : Window
         var tb = new TextBlock
         {
             Text = text,
-            Style = (Style)FindResource(inverse ? "InverseText" : blink ? "Blink" : dim ? "TermDim" : "Term"),
-            FontSize = size,
+            Style = (Style)FindResource(inverse ? "InverseText" : blink && !IsPlain ? "Blink" : dim ? "TermDim" : "Term"),
+            FontSize = IsPlain ? App.PlainTextSize : size,
             TextWrapping = TextWrapping.Wrap,
         };
+        blink = blink && !IsPlain;
         FrameworkElement el = tb;
         if (inverse)
         {
@@ -430,7 +450,7 @@ public partial class MainWindow : Window
     {
         var panel = new StackPanel { Orientation = Orientation.Horizontal };
         panel.Children.Add(new TextBlock { Text = text, Style = (Style)FindResource("Term") });
-        if (blinkCursor) panel.Children.Add(new TextBlock { Text = " █", Style = (Style)FindResource("Blink") });
+        if (blinkCursor && !IsPlain) panel.Children.Add(new TextBlock { Text = " █", Style = (Style)FindResource("Blink") });
         SheetPrompt.Children.Add(panel);
     }
 
@@ -438,26 +458,28 @@ public partial class MainWindow : Window
 
     private void ShowHelp()
     {
-        ShowSheet("OPERATOR INSTRUCTIONS", k =>
+        ShowSheet("HELP", k =>
         {
             if (k is Key.Escape or Key.Enter or Key.F1) { CloseSheet(); return true; }
             return false;
         });
 
         Line("WASM CHASM REMOVES THE WASM DATA OF SELECTED AIRCRAFT FROM MICROSOFT FLIGHT SIMULATOR 2024.");
-        Line("SUPPORT TEAMS OFTEN ASK FOR THIS TO CLEAR CRASHES OR CORRUPT STATE.", dim: true);
+        Line("SUPPORT TEAMS OFTEN ASK FOR THIS TO FIX CRASHES OR CORRUPT STATE.", dim: true);
         Gap();
         foreach (var (k, d) in new[]
                  {
                      ("UP / DOWN", "MOVE THE CURSOR"),
                      ("SPACE", "MARK OR UNMARK THE AIRCRAFT UNDER THE CURSOR (CLICK ALSO WORKS)"),
+                     ("RIGHT / LEFT", "MARK / UNMARK THE AIRCRAFT UNDER THE CURSOR"),
                      ("CTRL+A", "MARK EVERY AIRCRAFT SHOWN"),
                      ("CTRL+D / ESC", "UNMARK ALL"),
                      ("/ OR CTRL+F", "FILTER BY NAME"),
                      ("F6 / SHIFT+F6", "CHANGE SORT: NAME, SIZE, DATE / REVERSE"),
-                     ("ENTER", "CLEAR MARKED AIRCRAFT (YOU CONFIRM FIRST)"),
-                     ("F2", "SWITCH INSTALL (STEAM / STORE) OR BROWSE FOR A WASM FOLDER"),
+                     ("ENTER", "PURGE MARKED AIRCRAFT (YOU CONFIRM FIRST)"),
+                     ("F2", "SWITCH INSTALL (STEAM / STORE)"),
                      ("F3", "SETTINGS: DISPOSAL METHOD, BACKUPS, SCOPE, DRY RUN, CRT EFFECTS, SOUND"),
+                     ("F4", "SWITCH BETWEEN RETRO AND PLAIN MODE (NO EFFECTS, SAME FUNCTIONS)"),
                      ("F5", "RESCAN"),
                  })
         {
@@ -479,7 +501,6 @@ public partial class MainWindow : Window
         {
             switch (k)
             {
-                case Key.B: BrowseForWasmFolder(); return true;
                 case Key.F5: CloseSheet(); DetectAndChoose(); return true;
                 case Key.Escape: Close(); return true;
             }
@@ -496,17 +517,14 @@ public partial class MainWindow : Window
         }
 
         Gap();
-        Line("IF YOUR SIM KEEPS ITS DATA ELSEWHERE, BROWSE TO THE FOLDER NAMED WASM. IT SHOULD CONTAIN AN MSFS2024 OR MSFS2020 FOLDER.");
-        Line("THE CHASM WILL ONLY EVER TOUCH FOLDERS INSIDE THE ONE YOU CHOOSE.", dim: true);
-        Prompt("B BROWSE FOR WASM FOLDER.  F5 TRY AGAIN.  ESC QUIT.");
+        Line("START THE SIMULATOR ONCE IF IT HAS NEVER RUN ON THIS PC, THEN TRY AGAIN.");
+        Prompt("F5: TRY AGAIN    ESC: QUIT");
     }
 
     private void ShowInstallPicker(bool firstRun)
     {
         _detected = InstallDetection.DetectAll(InstallDetection.CreateLocators(_config));
         var options = _detected.ToList();
-        var custom = SavedCustomInstall();
-        if (custom is not null) options.Add(custom);
 
         ShowSheet(firstRun ? "SELECT INSTALL" : "SWITCH INSTALL", k =>
         {
@@ -517,7 +535,6 @@ public partial class MainWindow : Window
                 _ => -1,
             };
             if (idx >= 0 && idx < options.Count) { UseInstall(options[idx]); return true; }
-            if (k == Key.B) { BrowseForWasmFolder(); return true; }
             if (k is Key.Escape or Key.F2 && _install is not null) { CloseSheet(); return true; }
             return false;
         });
@@ -539,42 +556,7 @@ public partial class MainWindow : Window
 
         if (options.Count == 0) Line("NO INSTALLS DETECTED.");
         Gap();
-        Line("B  BROWSE FOR A WASM FOLDER");
-        Prompt(_install is null ? "PRESS A NUMBER OR B." : "PRESS A NUMBER OR B.  ESC CANCELS.");
-    }
-
-    private void BrowseForWasmFolder()
-    {
-        var dlg = new OpenFolderDialog
-        {
-            Title = "Choose the folder named WASM",
-            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        };
-        if (dlg.ShowDialog(this) != true) return;
-
-        var path = Path.TrimEndingDirectorySeparator(Path.GetFullPath(dlg.FolderName));
-        string? problem = null;
-        if (Path.GetPathRoot(path) is { } r && string.Equals(Path.TrimEndingDirectorySeparator(r), path, StringComparison.OrdinalIgnoreCase))
-            problem = "A DRIVE ROOT CANNOT BE USED.";
-        else if (!_config.KnownSimVersionFolders.Any(k => Directory.Exists(Path.Combine(path, k))))
-            problem = "THAT FOLDER HAS NO MSFS2024 OR MSFS2020 FOLDER INSIDE IT. CHOOSE THE FOLDER NAMED WASM.";
-
-        if (problem is not null)
-        {
-            ShowSheet("FOLDER REFUSED", k =>
-            {
-                if (k == Key.B) { BrowseForWasmFolder(); return true; }
-                if (k == Key.Escape) { if (_install is null) ShowNoInstall(); else CloseSheet(); return true; }
-                return false;
-            });
-            Line(path, dim: true);
-            Gap();
-            Line(problem);
-            Prompt("B BROWSE AGAIN.  ESC CANCELS.");
-            return;
-        }
-
-        UseInstall(InstallLocation.Custom(path) with { UserCfgPath = UserCfgDiscovery.FindAny(_config) });
+        Prompt(_install is null ? "PRESS A NUMBER." : "PRESS A NUMBER.    ESC: CANCEL");
     }
 
     private int _settingsCursor;
@@ -586,13 +568,13 @@ public partial class MainWindow : Window
         {
             switch (k)
             {
-                case Key.Up: _settingsCursor = (_settingsCursor + count - 1) % count; RenderSettings(); return true;
-                case Key.Down: _settingsCursor = (_settingsCursor + 1) % count; RenderSettings(); return true;
+                case Key.Up: _settingsCursor = (_settingsCursor + count - 1) % count; _sound.PlayTick(); RenderSettings(); return true;
+                case Key.Down: _settingsCursor = (_settingsCursor + 1) % count; _sound.PlayTick(); RenderSettings(); return true;
                 case Key.Space or Key.Enter or Key.Left or Key.Right: ActivateSetting(_settingsCursor); RenderSettings(); return true;
                 case Key.Escape or Key.F3:
                     _settings.Save();
                     ApplyCrt();
-                    _sound.Enabled = _settings.Sound;
+                    _sound.Enabled = _settings.Sound && !IsPlain;
                     foreach (var r in _rows) r.Scope = _settings.Scope;
                     SizeHeading.Text = ScopeText.ColumnHeading(_settings.Scope);
                     UpdateTotals();
@@ -618,8 +600,8 @@ public partial class MainWindow : Window
         };
         var items = new[]
         {
-            $"CRT EFFECTS ........ {(_settings.CrtEffects ? "ON" : "OFF")}{(SystemParameters.HighContrast ? "  (OFF WHILE HIGH CONTRAST IS ACTIVE)" : "")}",
-            $"SOUND .............. {(_settings.Sound ? "ON" : "OFF")}",
+            $"CRT EFFECTS ........ {(_settings.CrtEffects ? "ON" : "OFF")}{(IsPlain ? "  (NOT USED IN PLAIN MODE)" : SystemParameters.HighContrast ? "  (OFF WHILE HIGH CONTRAST IS ACTIVE)" : "")}",
+            $"SOUND .............. {(_settings.Sound ? "ON" : "OFF")}{(IsPlain ? "  (NOT USED IN PLAIN MODE)" : "")}",
             $"DISPOSAL METHOD .... {mode}",
             $"BACKUP FOLDER ...... {(_settings.BackupFolder ?? "NOT SET")}",
             $"SCOPE .............. {ScopeText.Name(_settings.Scope)}",
@@ -633,11 +615,11 @@ public partial class MainWindow : Window
         string note = _settingsCursor switch
         {
             0 => "SCANLINES, GLOW, CURVATURE AND THE ROLL BAND. TURN OFF FOR ACCESSIBILITY OR LOW-END GRAPHICS.",
-            1 => "RELAY CLICK ON SELECT, LOW HUM WHILE CLEARING, ONE BEEP ON COMPLETION.",
+            1 => "GENTLE HUM, GRADUAL POWER-UP, SOFT BLIP ON ROW CHANGE, RISING RATCHET ON SELECT, RETRO CRUMBLE IN THE CHASM, SOFT CHIME WHEN DONE.",
             2 => "RECYCLE BIN IS THE DEFAULT. A ZIP BACKUP IS WRITTEN TO THE BACKUP FOLDER FIRST IF CHOSEN.",
             3 => "WHERE ZIP BACKUPS ARE WRITTEN. ENTER TO CHOOSE.",
             4 => "COMPILED CACHE ONLY IS RECOMMENDED AND KEEPS SETTINGS. WORK FOLDER AND WHOLE PACKAGE ERASE SETTINGS AND ADD-ON DATA, WHICH MAY INCLUDE LICENCE FILES.",
-            _ => "SHOWS WHAT WOULD BE REMOVED AND TOUCHES NOTHING.",
+            _ => "SHOWS WHAT WOULD BE PURGED, FALL INTO THE CHASM INCLUDED, AND TOUCHES NOTHING.",
         };
         Line(note, dim: true);
         Prompt("UP/DOWN MOVE.  SPACE OR ENTER CHANGES.  ESC SAVES AND RETURNS.");
@@ -648,7 +630,7 @@ public partial class MainWindow : Window
         switch (index)
         {
             case 0: _settings.CrtEffects = !_settings.CrtEffects; ApplyCrt(); break;
-            case 1: _settings.Sound = !_settings.Sound; _sound.Enabled = _settings.Sound; _sound.PlayClick(); break;
+            case 1: _settings.Sound = !_settings.Sound; _sound.Enabled = _settings.Sound && !IsPlain; _sound.PlayClick(); break;
             case 2:
                 var next = _settings.DisposalMode switch
                 {
@@ -716,11 +698,18 @@ public partial class MainWindow : Window
         var options = new ConsignOptions { Scope = _settings.Scope, DryRun = _settings.DryRun, IncludeUnknownSimVersions = includeUnknown };
         var targets = ConsignmentService.BuildTargets(groups, options);
         var excludedUnknown = includeUnknown ? new List<WasmEntry>() : groups.SelectMany(g => g.Entries).Where(e => !e.IsKnownSimVersion).ToList();
-        var nothingToRemove = groups.SelectMany(g => g.Entries.Where(e => !e.HasContentFor(_settings.Scope) && (includeUnknown || e.IsKnownSimVersion)).Select(e => (g, e))).ToList();
-        bool needY = groups.Count > 5;
+        var aircraft = targets.GroupBy(t => t.PackageId, StringComparer.OrdinalIgnoreCase)
+            .Select(g => (Name: g.First().DisplayName, Bytes: g.Sum(t => t.SizeBytes)))
+            .ToList();
+        int nothingToPurge = groups.Count - aircraft.Count;
+        bool needY = aircraft.Count > 5;
         TextBox? yBox = null;
 
-        ShowSheet(_settings.DryRun ? "CONFIRM - DRY RUN" : "CONFIRM", k =>
+        string heading = targets.Count == 0 ? "NOTHING TO PURGE"
+            : _settings.DryRun ? $"DRY RUN: PURGE {aircraft.Count} AIRCRAFT?"
+            : $"PURGE {aircraft.Count} AIRCRAFT?";
+
+        ShowSheet(heading, k =>
         {
             switch (k)
             {
@@ -744,58 +733,44 @@ public partial class MainWindow : Window
             return false;
         });
 
-        string verb = _settings.DryRun
-            ? "LISTED ONLY. NOTHING WILL BE TOUCHED (DRY RUN)"
-            : _settings.DisposalMode switch
-            {
-                DisposalMode.ZipThenRecycle => $"BACKED UP TO {_settings.BackupFolder?.ToUpperInvariant()} AND MOVED TO THE RECYCLE BIN",
-                DisposalMode.Permanent => "DELETED PERMANENTLY. THIS CANNOT BE UNDONE",
-                _ => "MOVED TO THE RECYCLE BIN",
-            };
-
-        Line($"{groups.Count} AIRCRAFT. {targets.Count} FOLDERS. {ByteFormat.Megabytes(targets.Sum(t => t.SizeBytes))}.");
-        Line($"SCOPE: {ScopeText.Name(_settings.Scope)}.");
-        Line(_settings.Scope == DeletionScope.CompiledCache
-            ? $"THE COMPILED FILES IN THE FOLLOWING FOLDERS WILL BE {verb}:"
-            : $"THE FOLLOWING FOLDERS WILL BE {verb}:");
-        Gap(6);
-        foreach (var t in targets)
+        var size = ByteFormat.Megabytes(targets.Sum(t => t.SizeBytes));
+        bool permanent = !_settings.DryRun && _settings.DisposalMode == DisposalMode.Permanent;
+        if (targets.Count > 0)
         {
-            Line($"  {t.DisplayName}  [{t.SimVersionFolder}]  {ByteFormat.Format(t.SizeBytes)}");
-            Line($"    {t.Label}", dim: true, size: 18);
+            if (_settings.DryRun) Line("DRY RUN. NOTHING WILL BE TOUCHED.");
+            else if (permanent) Line($"{size} WILL BE DELETED FOREVER. THIS CANNOT BE UNDONE.", inverse: true);
+            else if (_settings.DisposalMode == DisposalMode.ZipThenRecycle) Line($"{size} WILL BE BACKED UP, THEN MOVED TO THE RECYCLE BIN.");
+            else Line($"{size} WILL MOVE TO THE RECYCLE BIN.");
+
+            // The default scope is safe, so it stays calm; the blinking warning is kept for the scopes that erase settings.
+            if (_settings.Scope != DeletionScope.CompiledCache) Line("WARNING", inverse: true, blink: true);
+            Line(ScopeText.Warning(_settings.Scope).ToUpperInvariant());
+            Gap(12);
+            foreach (var (name, bytes) in aircraft) Line($"  {name,-58} {ByteFormat.Format(bytes),10}");
+        }
+
+        if (nothingToPurge > 0)
+        {
+            Gap(6);
+            Line($"{nothingToPurge} MARKED AIRCRAFT HAVE NOTHING TO PURGE.", dim: true);
         }
 
         if (excludedUnknown.Count > 0)
         {
             Gap(6);
-            Line("NOT INCLUDED - UNKNOWN FOLDERS (NEVER CLEARED AUTOMATICALLY):");
-            foreach (var e in excludedUnknown) Line($"    {e.PackagePath}", dim: true, size: 18);
-            Line("PRESS U TO INCLUDE THEM.");
+            Line($"{excludedUnknown.Count} UNKNOWN FOLDERS NOT INCLUDED.  U: INCLUDE THEM", dim: true);
         }
-
-        if (nothingToRemove.Count > 0)
-        {
-            Gap(6);
-            Line($"NOTHING TO REMOVE ({ScopeText.NothingToRemove(_settings.Scope)}):");
-            foreach (var (g, e) in nothingToRemove) Line($"    {g.DisplayName}  [{e.SimVersionFolder}]", dim: true, size: 18);
-        }
-
-        Gap(12);
-        Line("WARNING", inverse: true, blink: true);
-        Line(ScopeText.Warning(_settings.Scope).ToUpperInvariant());
-        if (!_settings.DryRun && _settings.DisposalMode == DisposalMode.Permanent)
-            Line("PERMANENT DELETE IS ON. THERE IS NO RECYCLE BIN COPY.", inverse: true);
 
         if (targets.Count == 0)
         {
-            Prompt("NOTHING TO CLEAR.  ESC RETURNS.");
+            Prompt("ESC: BACK");
             return;
         }
 
         if (needY)
         {
             var panel = new StackPanel { Orientation = Orientation.Horizontal };
-            panel.Children.Add(new TextBlock { Text = "MORE THAN FIVE AIRCRAFT. TYPE Y AND PRESS ENTER TO PROCEED. ESC CANCELS.  ", Style = (Style)FindResource("Term") });
+            panel.Children.Add(new TextBlock { Text = "MORE THAN FIVE AIRCRAFT. TYPE Y, THEN ENTER.    ESC: CANCEL    ", Style = (Style)FindResource("Term") });
             yBox = new TextBox { Style = (Style)FindResource("TermTextBox"), Width = 30, MaxLength = 1 };
             AutomationPropertiesHelper.SetName(yBox, "Type Y to confirm");
             panel.Children.Add(yBox);
@@ -804,7 +779,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            Prompt("PRESS ENTER TO PROCEED.  ESC CANCELS.");
+            Prompt("ENTER: PURGE    ESC: CANCEL");
         }
     }
 
@@ -822,13 +797,13 @@ public partial class MainWindow : Window
                     if (k == Key.Escape) { CloseSheet(); return true; }
                     return false;
                 });
-                Line("FLIGHTSIMULATOR2024.EXE IS RUNNING. ITS DATA CANNOT BE CLEARED WHILE IT IS OPEN.");
+                Line("FLIGHTSIMULATOR2024.EXE IS RUNNING. ITS DATA CANNOT BE PURGED WHILE IT IS OPEN.");
                 Line("NOTHING HAS BEEN TOUCHED.", dim: true);
                 Prompt("CLOSE THE SIMULATOR, THEN PRESS ENTER TO TRY AGAIN.  ESC CANCELS.");
                 return;
 
             case PreflightProblem.NothingToConsign:
-                ShowSheet("NOTHING TO CLEAR", k =>
+                ShowSheet("NOTHING TO PURGE", k =>
                 {
                     if (k is Key.Escape or Key.Enter) { CloseSheet(); return true; }
                     return false;
@@ -889,8 +864,8 @@ public partial class MainWindow : Window
         Ledger.IsHitTestVisible = false;
         Legend.IsEnabled = false;
         _consignCts = new CancellationTokenSource();
-        StatusText.Text = options.DryRun ? "DRY RUN IN PROGRESS." : "CLEARING. ESC STOPS AFTER THE CURRENT FOLDER.";
-        if (!options.DryRun) _sound.StartHum();
+        StatusText.Text = options.DryRun ? "DRY RUN. NOTHING IS BEING PURGED." : "PURGING. ESC STOPS AFTER THE CURRENT FOLDER.";
+        _sound.StartHum();
 
         var remaining = pre.Targets.GroupBy(t => t.PackageId, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
@@ -899,12 +874,13 @@ public partial class MainWindow : Window
         var progress = new Progress<ConsignProgress>(p =>
         {
             var id = p.Result.Target.PackageId;
-            if (p.Result.Outcome == ConsignOutcome.Removed) removedAny.Add(id);
+            // A dry run rehearses the fall too. Nothing is touched, and the rescan after the results screen brings the rows back.
+            if (p.Result.Outcome is ConsignOutcome.Removed or ConsignOutcome.WouldRemove) removedAny.Add(id);
             if (!remaining.ContainsKey(id)) return;
             if (--remaining[id] > 0) return;
             var row = _rows.FirstOrDefault(r => string.Equals(r.PackageId, id, StringComparison.OrdinalIgnoreCase));
-            if (row is not null && !options.DryRun) EnqueueFall(row, removedAny.Contains(id));
-            StatusText.Text = $"{p.Index + 1} OF {p.Total} FOLDERS PROCESSED.";
+            if (row is not null) EnqueueFall(row, removedAny.Contains(id));
+            StatusText.Text = $"{(options.DryRun ? "DRY RUN. NOTHING IS BEING PURGED. " : "")}{p.Index + 1} OF {p.Total} FOLDERS PROCESSED.";
         });
 
         IReadOnlyList<ConsignResult> results;
@@ -923,13 +899,25 @@ public partial class MainWindow : Window
         await _animationTail;
 
         _sound.StopHum();
-        _sound.PlayBeep();
+        _sound.PlayChime();
         _consigning = false;
         Ledger.IsHitTestVisible = true;
         Legend.IsEnabled = true;
         _consignCts.Dispose();
         _consignCts = null;
-        ShowResults(pre.Refused.Concat(results).ToList(), options.DryRun);
+
+        // In Retro, watching a clean purge fall into the chasm is the confirmation. Anything that needs
+        // reading still gets the page, and so does a run with no animation to watch.
+        var all = pre.Refused.Concat(results).ToList();
+        if (IsPlain || options.DryRun || !SystemParameters.ClientAreaAnimation || ScopeText.NeedsResultsPage(all))
+        {
+            ShowResults(all, options.DryRun);
+        }
+        else
+        {
+            await RescanAsync();
+            StatusText.Text = ScopeText.Summary(all, dryRun: false);
+        }
     }
 
     private void ShowResults(IReadOnlyList<ConsignResult> results, bool dryRun)
@@ -957,8 +945,8 @@ public partial class MainWindow : Window
         {
             string tag = r.Outcome switch
             {
-                ConsignOutcome.Removed => "CLEARED",
-                ConsignOutcome.WouldRemove => "WOULD CLEAR",
+                ConsignOutcome.Removed => "PURGED",
+                ConsignOutcome.WouldRemove => "WOULD PURGE",
                 ConsignOutcome.Skipped => "SKIPPED",
                 _ => "FAILED",
             };
@@ -994,7 +982,7 @@ public partial class MainWindow : Window
 
     private async Task AnimateFall(AircraftRow row, bool removed)
     {
-        if (!SystemParameters.ClientAreaAnimation)
+        if (!SystemParameters.ClientAreaAnimation || IsPlain)
         {
             row.IsDetached = removed;
             return;
@@ -1045,6 +1033,7 @@ public partial class MainWindow : Window
             Animate(st, ScaleTransform.ScaleYProperty, new DoubleAnimation(1, scale, dur)));
 
         // 2. Break into characters that fall into the dark.
+        _sound.PlayDisintegrate();
         double x0 = Canvas.GetLeft(ghost) + 6 * scale;
         double y0 = Canvas.GetTop(ghost);
         double charW = label.DesiredSize.Width > 0 ? label.DesiredSize.Width / text.Length : 9;
@@ -1098,9 +1087,202 @@ public partial class MainWindow : Window
 
     // ───────────────────────────── CRT and chrome ─────────────────────────────
 
+    // ───────────────────────────── Retro / Plain ─────────────────────────────
+
+    private bool IsPlain => _settings.Mode == AppMode.Plain;
+    private Brush? _retroBezel;
+    private Brush? _retroFrame;
+    private Geometry? _retroClip;
+    private Brush? _retroWindow;
+
+    private void ToggleMode()
+    {
+        _settings.Mode = IsPlain ? AppMode.Retro : AppMode.Plain;
+        _settings.Save();
+        ApplyMode();
+        ApplyCrt();
+        Chasm.Redraw();
+    }
+
+    /// <summary>
+    /// Plain mode is the same app with the theatre removed: no bezel, chasm, effects, animations or sound.
+    /// Only appearance changes here; everything the app does to files is untouched.
+    /// </summary>
+    private void ApplyMode()
+    {
+        bool plain = IsPlain;
+        App.SetPlainTheme(plain);
+
+        _retroBezel ??= Bezel.Background;
+        _retroFrame ??= ScreenFrame.Background;
+        _retroClip ??= ScreenRoot.Clip;
+        _retroWindow ??= Background;
+
+        Background = plain ? (Brush)FindResource("ScreenBg") : _retroWindow;
+        Monitor.Margin = new Thickness(plain ? 0 : 12);
+        Bezel.Background = plain ? Brushes.Transparent : _retroBezel;
+        Bezel.BorderThickness = new Thickness(plain ? 0 : 2);
+        ScreenFrame.Background = plain ? Brushes.Transparent : _retroFrame;
+        ScreenFrame.BorderThickness = new Thickness(plain ? 0 : 6);
+        ScreenFrame.Margin = plain ? new Thickness(0) : new Thickness(34, 30, 34, 50);
+        ScreenRoot.Width = plain ? 1040 : 952;
+        ScreenRoot.Height = plain ? 800 : 708;
+        ScreenRoot.Clip = plain ? null : _retroClip;
+
+        var furniture = plain ? Visibility.Collapsed : Visibility.Visible;
+        MakerPlate.Visibility = furniture;
+        ClockText.Visibility = furniture;
+        PowerPanel.Visibility = furniture;
+        Chasm.Visibility = furniture;
+        ChasmGapColumn.Width = new GridLength(plain ? 0 : 16);
+        ChasmColumn.Width = plain ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+
+        ModeText.Text = plain ? "MODE: PLAIN  [F4]" : "MODE: RETRO  [F4]";
+        _sound.Enabled = _settings.Sound && !plain;
+    }
+
+    // ───────────────────────────── Splash ─────────────────────────────
+
+    private const double SplashSeconds = 2.0;
+    private bool _splashUp;
+    private DispatcherTimer? _splashTimer;
+
+    /// <summary>
+    /// The logo, shown through the power-on effect. The scan carries on behind it, and any key or click skips it.
+    /// Skipped entirely when Windows animations are off.
+    /// </summary>
+    private void PrepareSplash()
+    {
+        if (!SystemParameters.ClientAreaAnimation) return;
+
+        SplashWasm.OpacityMask = SplashStripes();
+        SplashChasm.OpacityMask = SplashStripes();
+        _splashUp = true;
+        Splash.Visibility = Visibility.Visible;
+        MainContent.Opacity = 0;
+        Sheet.Opacity = 0;
+
+        void Start(object? sender, EventArgs e)
+        {
+            ContentRendered -= Start;
+            if (!_splashUp) return;
+            _splashTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(SplashSeconds) };
+            _splashTimer.Tick += (_, _) => DismissSplash();
+            _splashTimer.Start();
+        }
+
+        ContentRendered += Start;
+    }
+
+    /// <summary>Solid at the top of the letters, then cut by stripes that widen towards the bottom.</summary>
+    private static Brush SplashStripes()
+    {
+        var mask = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+        void Band(double from, double to, Color color)
+        {
+            mask.GradientStops.Add(new GradientStop(color, from));
+            mask.GradientStops.Add(new GradientStop(color, to));
+        }
+
+        Band(0, 0.56, Colors.Black);
+        double y = 0.56;
+        double gap = 0.008;
+        double solid = 0.04;
+        while (y < 1)
+        {
+            Band(y, Math.Min(1, y + gap), Colors.Transparent);
+            y += gap;
+            Band(y, Math.Min(1, y + solid), Colors.Black);
+            y += solid;
+            gap += 0.006;
+            solid = Math.Max(0.016, solid - 0.004);
+        }
+
+        return mask;
+    }
+
+    private void OnSplashMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        DismissSplash();
+        e.Handled = true;
+    }
+
+    private void DismissSplash()
+    {
+        if (!_splashUp) return;
+        _splashUp = false;
+        _splashTimer?.Stop();
+        Sheet.Opacity = 1;
+
+        var fade = TimeSpan.FromSeconds(0.25);
+        MainContent.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, fade) { FillBehavior = FillBehavior.Stop });
+        MainContent.Opacity = 1;
+        var fadeOut = new DoubleAnimation(1, 0, fade) { FillBehavior = FillBehavior.Stop };
+        fadeOut.Completed += (_, _) => Splash.Visibility = Visibility.Collapsed;
+        Splash.IsHitTestVisible = false;
+        Splash.BeginAnimation(OpacityProperty, fadeOut);
+    }
+
+    // ───────────────────────────── Power-on ─────────────────────────────
+
+    /// <summary>
+    /// A short tube warm-up: a bright line grows across the dark screen, opens to full height, and the display
+    /// flickers on. It is cosmetic, so it never blocks input, and it respects the settings that turn effects off.
+    /// </summary>
+    private void PreparePowerOn()
+    {
+        bool on = _settings.CrtEffects && !SystemParameters.HighContrast && SystemParameters.ClientAreaAnimation;
+        if (!on) return;
+
+        var contentScale = new ScaleTransform(1, 0.01);
+        var beamScale = new ScaleTransform(0, 3.0 / 708);
+        Glow.RenderTransformOrigin = new Point(0.5, 0.5);
+        Glow.RenderTransform = contentScale;
+        Glow.Opacity = 0;
+        PowerBeam.RenderTransform = beamScale;
+        PowerBeam.Visibility = Visibility.Visible;
+        PowerLamp.Opacity = 0;
+
+        void Start(object? sender, EventArgs e)
+        {
+            ContentRendered -= Start;
+            _sound.PlayPowerOn();
+
+            static DoubleAnimationUsingKeyFrames Keys(params (double Seconds, double Value)[] frames)
+            {
+                var a = new DoubleAnimationUsingKeyFrames();
+                foreach (var (s, v) in frames)
+                    a.KeyFrames.Add(new EasingDoubleKeyFrame(v, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(s)), new QuadraticEase { EasingMode = EasingMode.EaseOut }));
+                return a;
+            }
+
+            contentScale.BeginAnimation(ScaleTransform.ScaleYProperty, Keys((0.14, 0.01), (0.38, 1)));
+            Glow.BeginAnimation(OpacityProperty, Keys((0.20, 0), (0.42, 1), (0.50, 0.65), (0.60, 1), (0.66, 0.85), (0.74, 1)));
+            beamScale.BeginAnimation(ScaleTransform.ScaleXProperty, Keys((0.14, 1)));
+            beamScale.BeginAnimation(ScaleTransform.ScaleYProperty, Keys((0.14, 3.0 / 708), (0.36, 1)));
+            PowerLamp.BeginAnimation(OpacityProperty, Keys((0.05, 0.85)));
+
+            var fade = Keys((0.14, 0.95), (0.36, 0.45), (0.85, 0));
+            fade.Completed += (_, _) =>
+            {
+                // Remove the transform as well as the animation, so text stays crisp afterwards.
+                PowerBeam.BeginAnimation(OpacityProperty, null);
+                PowerBeam.Visibility = Visibility.Collapsed;
+                Glow.BeginAnimation(OpacityProperty, null);
+                Glow.Opacity = 1;
+                Glow.RenderTransform = null;
+                PowerLamp.BeginAnimation(OpacityProperty, null);
+                PowerLamp.Opacity = 0.85;
+            };
+            PowerBeam.BeginAnimation(OpacityProperty, fade);
+        }
+
+        ContentRendered += Start;
+    }
+
     private void ApplyCrt()
     {
-        bool on = _settings.CrtEffects && !SystemParameters.HighContrast;
+        bool on = _settings.CrtEffects && !SystemParameters.HighContrast && !IsPlain;
         if (on)
         {
             var shader = CrtEffect.TryCreate();
@@ -1118,9 +1300,11 @@ public partial class MainWindow : Window
             };
             RollTransform.BeginAnimation(TranslateTransform.YProperty,
                 new DoubleAnimation(-120, 708, TimeSpan.FromSeconds(9)) { RepeatBehavior = RepeatBehavior.Forever });
+            Chasm.AnimateTitle(true);
         }
         else
         {
+            Chasm.AnimateTitle(false);
             ScreenRoot.Effect = null;
             Glow.Effect = null;
             ScanlineOverlay.Visibility = Visibility.Collapsed;

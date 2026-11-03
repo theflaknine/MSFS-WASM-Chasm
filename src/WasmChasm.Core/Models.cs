@@ -3,7 +3,6 @@ namespace WasmChasm.Core;
 /// <summary>A detected (or user-chosen) sim install: where its WASM data and UserCfg.opt live.</summary>
 public sealed record InstallLocation(string StoreId, string Label, string WasmRoot, string? UserCfgPath)
 {
-    public bool IsCustom => StoreId == CustomStoreId;
     public const string CustomStoreId = "custom";
 
     public static InstallLocation Custom(string wasmRoot) =>

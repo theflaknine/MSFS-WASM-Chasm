@@ -6,6 +6,7 @@
     <AssemblyName>WasmChasm</AssemblyName>
     <RootNamespace>WasmChasm.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\WasmChasm.ico</ApplicationIcon>
     <!-- Single-file, self-contained x64 release build. -->
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
     <PublishSingleFile>true</PublishSingleFile>
@@ -18,7 +19,12 @@
     <ProjectReference Include="..\WasmChasm.Core\WasmChasm.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="NAudio.WinMM" Version="2.2.1" />
+    <PackageReference Include="NAudio.Core" Version="2.2.1" />
+  </ItemGroup>
+  <ItemGroup>
     <Resource Include="Fonts\VT323-Regular.ttf" />
+    <Resource Include="Assets\WasmChasm.ico" />
     <!-- Compiled from Shaders\crt.fx by fxc.exe (Windows SDK); see README. Optional: the app falls back to overlay effects. -->
     <Resource Include="Shaders\crt.ps" Condition="Exists('Shaders\crt.ps')" />
     <None Include="Shaders\crt.fx" />

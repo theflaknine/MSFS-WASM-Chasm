@@ -1,14 +1,28 @@
 <UserControl x:Class="WasmChasm.App.Views.ChasmView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             AutomationProperties.Name="The chasm. Depth gauge shows the data marked to clear.">
+             AutomationProperties.Name="The chasm. Depth gauge shows the data marked to purge.">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <TextBlock Style="{StaticResource TermDim}" Text="THE CHASM" HorizontalAlignment="Center" Margin="0,0,0,4" />
+        <!-- The right margin matches the gauge column, so the label is centred over the pit itself.
+             The mask makes the letters sink into darkness; the code behind makes them breathe. -->
+        <TextBlock x:Name="ChasmTitle" Style="{StaticResource Term}" Text="T H E   C H A S M" FontSize="30"
+                   HorizontalAlignment="Center" Margin="0,0,44,2" Opacity="0.8"
+                   AutomationProperties.Name="The chasm">
+            <TextBlock.OpacityMask>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#FF000000" Offset="0.25" />
+                    <GradientStop Color="#40000000" Offset="0.95" />
+                </LinearGradientBrush>
+            </TextBlock.OpacityMask>
+            <TextBlock.Effect>
+                <DropShadowEffect Color="#FFB000" BlurRadius="16" ShadowDepth="0" Opacity="0.7" />
+            </TextBlock.Effect>
+        </TextBlock>
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -20,9 +34,9 @@
                 <Canvas x:Name="Gauge" SizeChanged="OnGaugeSizeChanged" />
             </Grid>
         </Grid>
-        <StackPanel Grid.Row="2" HorizontalAlignment="Center">
+        <StackPanel Grid.Row="2" HorizontalAlignment="Center" Margin="0,0,44,0">
             <TextBlock Style="{StaticResource TermDim}" Text="DEPTH GAUGE" HorizontalAlignment="Center" />
-            <TextBlock x:Name="DepthText" Style="{StaticResource Term}" Text="0 MB MARKED" HorizontalAlignment="Center"
+            <TextBlock x:Name="DepthText" Style="{StaticResource Term}" Text="0 B OF 0 B MARKED" HorizontalAlignment="Center"
                        AutomationProperties.LiveSetting="Polite" />
         </StackPanel>
     </Grid>

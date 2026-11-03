@@ -34,7 +34,7 @@ public sealed class ConfiguredInstallLocator : IInstallLocator
         return new InstallLocation(_store.Id, _store.Label, Path.GetFullPath(root), cfg);
     }
 
-    /// <summary>The WASM folder, if it exists but isn't backed by an install. Never cleared unless browsed to.</summary>
+    /// <summary>The WASM folder, if it exists but isn't backed by an install. The app ignores it; the CLI can inspect it with --root.</summary>
     public string? FindStrayRoot()
     {
         var root = PathTemplate.Expand(_store.WasmRoot, _getEnv);
@@ -52,19 +52,3 @@ public static class InstallDetection
         locators.Select(l => l.Locate()).Where(l => l is not null).Select(l => l!).ToList();
 }
 
-public static class UserCfgDiscovery
-{
-    /// <summary>For a custom WASM folder: the first UserCfg.opt any known store has, so titles can still resolve.</summary>
-    public static string? FindAny(LocationsConfig config, Func<string, string?>? getEnv = null)
-    {
-        getEnv ??= Environment.GetEnvironmentVariable;
-        foreach (var store in config.Stores)
-        {
-            if (store.UserCfg is null) continue;
-            var path = PathTemplate.Expand(store.UserCfg, getEnv);
-            if (path is not null && File.Exists(path)) return path;
-        }
-
-        return null;
-    }
-}

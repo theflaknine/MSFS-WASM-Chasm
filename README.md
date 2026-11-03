@@ -4,7 +4,7 @@
 >
 > **By default WASM Chasm removes only the compiled files the sim generated, and keeps the `work` folder.**
 >
-> **Warning: clearing an aircraft's `work` folder is a separate, stronger option. It erases that aircraft's
+> **Warning: purging an aircraft's `work` folder is a separate, stronger option. It erases that aircraft's
 > own settings and saved state, and anything add-on tools stored there — for example installed navdata, a
 > SimBrief alias, a Hoppie ID, or licence and activation files.** You may need to re-enter, reinstall or
 > reactivate them. Everything goes to the Recycle Bin by default so you can restore it.
@@ -14,7 +14,7 @@ Microsoft Store / PC Game Pass). Pick one or more aircraft and remove their WASM
 instead of hunting through AppData by package ID.
 
 It looks like an anonymous late-1970s office terminal: amber phosphor, scanlines, and a chasm on the right
-that the aircraft you clear fall into — one row at a time, as each folder actually completes.
+that the aircraft you purge fall into — one row at a time, as each folder actually completes.
 
 No installer. No telemetry. No network access. No admin rights.
 
@@ -34,10 +34,10 @@ A package folder holds two different things:
 
 An install only counts if `UserCfg.opt` is there too. A WASM folder on its own proves nothing: on a
 Store-only machine, a folder holding only licence files has been seen at the Steam path. To look at a folder
-like that, browse to it (F2) or use `--root`.
+like that, use the CLI's `--root`.
 
 2020-format aircraft use an `MSFS2020` sibling folder. Other siblings (for example `MSFS2024_now_valid`)
-are shown under their own name but are **never cleared automatically** — you have to include them
+are shown under their own name but are **never purged automatically** — you have to include them
 explicitly on the confirm screen.
 
 All of these paths live in [`data/locations.json`](data/locations.json). If a Sim Update moves them, edit
@@ -49,17 +49,21 @@ that file (a copy placed beside `WasmChasm.exe` overrides the built-in one).
 | --- | --- |
 | ↑ ↓ | Move the cursor |
 | Space / click | Mark or unmark an aircraft |
+| → / ← | Mark / unmark an aircraft |
 | Ctrl+A / Ctrl+D | Mark all shown / unmark all |
 | `/` or Ctrl+F | Filter by name |
 | F6 / Shift+F6 | Sort by name, size or date / reverse |
-| Enter | Clear marked aircraft (a confirm screen always follows) |
-| Esc | Cancel / clear marks / stop after the current folder |
+| Enter | Purge marked aircraft (a confirm screen always follows) |
+| Esc | Cancel / unmark all / stop after the current folder |
 | F1 | Help |
-| F2 | Switch install (Steam / Store) or browse for a WASM folder |
+| F2 | Switch install (Steam / Store) |
 | F3 | Settings |
+| F4 | Switch between Retro and Plain mode |
 | F5 | Rescan |
 
-**Settings (F3):** CRT effects on/off, sound on/off (off by default), disposal method (Recycle Bin —
+**Retro and Plain:** Retro is the amber terminal. Plain (F4) is the same app with the theatre removed: plain grey, one standard font at one size, and no bezel, chasm, session clock, splash, animations or sound. It only changes how the app looks and sounds, and the choice is remembered.
+
+**Settings (F3):** CRT effects on/off, sound on/off (off by default; a gentle hum, a rising ratchet as you mark aircraft, a retro crumble and a chime), disposal method (Recycle Bin —
 default; zip backup then Recycle Bin; permanent delete), backup folder, scope (compiled cache only — default;
 work folder only; or whole package folder) and dry run.
 
@@ -90,11 +94,11 @@ manager has unlinked the aircraft or the sim streams it, the list shows the pack
 ```
 wasmchasm stores
 wasmchasm scan [--store steam|store] [--root <WASM folder>] [--json]
-wasmchasm clear <package-id>... [--dry-run] [--scope compiled|work|package] [--include-unknown]
+wasmchasm purge <package-id>... [--dry-run] [--scope compiled|work|package] [--include-unknown]
                 [--mode recycle|zip|permanent] [--backup <folder>] [--yes]
 ```
 
-`clear` is always a dry run unless `--yes` is given. The default scope is `compiled`.
+`purge` is always a dry run unless `--yes` is given. The default scope is `compiled`.
 
 ## Building
 
@@ -124,10 +128,11 @@ curvature).
 
 ```
 src/WasmChasm.Core/      install detection, scanning, name resolution, path guard, disposal (no UI)
-src/WasmChasm.App/       WPF shell, CRT renderer, ledger and chasm views, settings
-src/WasmChasm.Cli/       console wrapper: scan, clear --dry-run
+src/WasmChasm.App/       WPF shell, CRT renderer, list and chasm views, settings
+src/WasmChasm.Cli/       console wrapper: scan, purge --dry-run
 tests/WasmChasm.Tests/   xUnit against synthetic fixture trees
 data/locations.json      every store-specific path
+tools/MakeIcon.ps1       draws the app icon
 docs/SPEC.md             the specification
 ```
 
@@ -135,7 +140,7 @@ docs/SPEC.md             the specification
 
 Milestone **M0 (path verification with ProcMon on real Steam and Store installs) has not been done yet.**
 The paths in `locations.json` are marked `"verified": false`. Until M0 is done, use dry run first (F3 → Dry
-run, or `wasmchasm clear … --dry-run`) and check the listed folders.
+run, or `wasmchasm purge … --dry-run`) and check the listed folders.
 
 **Seen so far, on one Store install (read-only inspection, not ProcMon):** the Store WASM root and
 `UserCfg.opt` are where `locations.json` says; compiled files sit beside `work`; no `work\wasm` folder exists
@@ -143,13 +148,13 @@ in any of its 43 packages under the WASM root, despite some guides; there was no
 
 **Not yet tested:**
 
-- That the sim rebuilds removed compiled files cleanly, and that clearing them fixes the problems users report.
+- That the sim rebuilds removed compiled files cleanly, and that purging them fixes the problems users report.
   The compiled-cache default relies on this.
 - Anything on a real Steam install, including whether `UserCfg.opt` is at the expected path. If it isn't, a
-  Steam install won't be detected and you'll need to browse to its WASM folder.
+  Steam install won't be detected, and the fix is a corrected `locations.json` beside the app.
 - What `MSFS2024_now_valid` is for.
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE). The bundled VT323 font is © The VT323 Project Authors, SIL Open Font
+MIT — see [LICENSE](LICENSE). Audio mixing uses [NAudio](https://github.com/naudio/NAudio) (MIT). The bundled VT323 font is © The VT323 Project Authors, SIL Open Font
 Licence 1.1 ([OFL.txt](src/WasmChasm.App/Fonts/OFL.txt)).
