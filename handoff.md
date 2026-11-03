@@ -1,6 +1,6 @@
 # Handoff
 
-State as of 2026-11-03. Read `CLAUDE.md` first for how the project works. Check this file against the code, since it will go stale.
+State as of 2026-11-03 (end of session). Read `CLAUDE.md` first for how the project works. Check this file against the code, since it will go stale.
 
 ## Where things stand
 
@@ -22,9 +22,18 @@ v0.1 is on `main` and builds. It moved from .NET 8 to .NET Framework 4.8 to shri
 ## Before a full (non-pre-release) release
 
 1. **Test on a real Steam install.** The dev machine can't. If `UserCfg.opt` isn't at the expected path, the install won't be detected, and with browsing removed the only fix is a corrected `locations.json`.
-2. **Check a CI build by eye.** CI builds the 4.8 version successfully (0.72 MB artifact), but nobody has run that artifact yet. A local build with the real shader looked the same in captures, and the user tried it on a fake install. Try it on a second PC too, ideally with Windows' long-path setting off.
+2. **Second PC.** The exe from the rc2 zip has been run on a fake install on the dev machine and worked, including Esc and dry run. It hasn't run on any other PC. Try one, ideally with Windows' long-path setting off.
 3. **Finish M0.** ProcMon on Steam and Store installs. `locations.json` is still marked `"verified": false`, and `MSFS2024_now_valid` remains unexplained because it doesn't exist on this machine.
 
+
+## Release state
+
+- `v0.1.0-rc2` is public as a **pre-release**: `wasm-chasm-win-x64.zip` (exe, `locations.json`, licences) plus `SHA256SUMS.txt`, built by CI with a build attestation. The README says it is untested on Steam and asks Steam users to report in Issues.
+- The `v*` tag ruleset was created by the user. **Release immutability:** the API reported `immutable: false` for rc2, so check Settings → General → Releases and turn it on before the next release.
+- Still on the user's list: fork-PR approval and read-only default workflow permissions, if not already set.
+- Code signing: decided against. The README warns about SmartScreen.
+- A short demo video was uploaded to YouTube. Its description links to the repo and Releases page.
+- The "no install found" screen lists the WASM root and `UserCfg.opt` paths and points to Issues, so a Steam user can report what was missing.
 
 ## Not confirmed
 
@@ -41,7 +50,7 @@ None of these have been fixed; the user hasn't decided on them.
 - **Partial purges:** a locked file stops an aircraft mid-way, so some of its compiled files may already be in the Recycle Bin when it's reported as `FAILED`. Nothing is lost, since the sim rebuilds them. Checking for locks first would make it all-or-nothing.
 - **Serious mode:** text is still in capitals and the row cursor still blinks. Sentence case would be a bigger change.
 - **Footer:** it says `SPACE: SELECT` and doesn't mention the arrow keys, to avoid crowding it.
-- **Rows after a purge:** a purged aircraft stays in the list at `0 B`, because its `work` folder remains.
+- **Rows after a purge:** with the default scope, a purged aircraft stays in the list at `0 B`, because its `work` folder remains. Whole-package scope removes the folder, so the row disappears.
 
 ## Open questions in the spec
 
@@ -58,3 +67,5 @@ The font choice (VT323) is in use, though that question is still listed as open 
 - The Recycle Bin may hold small test files named `m78edaad72d8f5958_0.*`, `m0123456789abcdef_0.*` and `mabcdef00000000*_0.*`, which are safe to empty. None came from real add-ons.
 - The session log at `%LOCALAPPDATA%\WasmChasm\wasmchasm.log` contains some lines from fake-install test runs.
 - No real aircraft data has been purged.
+- Recording and test helpers lived in the Claude scratchpad, not the repo, and are lost with the session. The method is in `CLAUDE.md`: a fake install under a scratch tree, `LOCALAPPDATA` and `APPDATA` pointed at it, settings backed up and restored. A demo run needs Scope `PackageFolder`, disposal `RecycleBin`, dry run off and `ModeChosen` false for the first-run page.
+- Small wording idea, not done: the Fun line on the mode page says "AMBER SCREEN". The README no longer describes colours.
