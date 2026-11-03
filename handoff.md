@@ -4,7 +4,7 @@ State as of 2026-11-03. Read `CLAUDE.md` first for how the project works. Check 
 
 ## Where things stand
 
-v0.1 is on `main` and builds. It moved from .NET 8 to .NET Framework 4.8 to shrink the download from 92.5 MB to 0.7 MB. All 190 tests pass locally, plus one opt-in test against the real Recycle Bin (`WASMCHASM_RECYCLE_TEST`). There is no release or tag yet.
+v0.1 is on `main` and builds. It moved from .NET 8 to .NET Framework 4.8 to shrink the download from 92.5 MB to 0.7 MB. All 196 tests pass locally, plus one opt-in test against the real Recycle Bin (`WASMCHASM_RECYCLE_TEST`). There is no release or tag yet.
 
 **Built so far:**
 
@@ -22,10 +22,9 @@ v0.1 is on `main` and builds. It moved from .NET 8 to .NET Framework 4.8 to shri
 ## Before any release
 
 1. **Test on a real Steam install.** The dev machine can't. If `UserCfg.opt` isn't at the expected path, the install won't be detected, and with browsing removed the only fix is a corrected `locations.json`.
-2. **Check a CI build by eye.** The move to 4.8 hasn't been built by CI yet. A local build with the real shader looked the same in captures, and the user tried it on a fake install. Try it on a second PC too, ideally with Windows' long-path setting off.
+2. **Check a CI build by eye.** CI builds the 4.8 version successfully (0.72 MB artifact), but nobody has run that artifact yet. A local build with the real shader looked the same in captures, and the user tried it on a fake install. Try it on a second PC too, ideally with Windows' long-path setting off.
 3. **Finish M0.** ProcMon on Steam and Store installs. `locations.json` is still marked `"verified": false`, and `MSFS2024_now_valid` remains unexplained because it doesn't exist on this machine.
 
-4. **Add third-party notices.** The exe embeds NAudio and System.Text.Json and its dependencies, all MIT. Their licence texts should ship with the release.
 
 ## Not confirmed
 
@@ -40,9 +39,6 @@ v0.1 is on `main` and builds. It moved from .NET 8 to .NET Framework 4.8 to shri
 None of these have been fixed; the user hasn't decided on them.
 
 - **Partial purges:** a locked file stops an aircraft mid-way, so some of its compiled files may already be in the Recycle Bin when it's reported as `FAILED`. Nothing is lost, since the sim rebuilds them. Checking for locks first would make it all-or-nothing.
-- **Failure wording:** the results page says `DONE. 0 AIRCRAFT PURGED.` under a `DONE` heading even when everything failed.
-- **Long dry runs:** marking all 43 aircraft means a long animation, and Esc can't stop it because the work has already finished. It could speed up or skip.
-- **Esc moves the cursor:** clearing marks with Esc sends the cursor back to the top row.
 - **Serious mode:** text is still in capitals and the row cursor still blinks. Sentence case would be a bigger change.
 - **Footer:** it says `SPACE: SELECT` and doesn't mention the arrow keys, to avoid crowding it.
 - **Rows after a purge:** a purged aircraft stays in the list at `0 B`, because its `work` folder remains.

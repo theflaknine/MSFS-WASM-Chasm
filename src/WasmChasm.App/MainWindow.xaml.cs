@@ -42,6 +42,8 @@ public partial class MainWindow : Window
     private Func<Key, bool>? _sheetKeys;
     private Task _animationTail = Task.CompletedTask;
     private int _pendingAnimations;
+    private bool _skipFalls;
+    private bool _purgeWorkDone;
     private bool _rendered;
 
     public MainWindow()
@@ -361,11 +363,20 @@ public partial class MainWindow : Window
 
     private void SetMarks(Func<AircraftRow, bool> predicate, bool value)
     {
+        // Changing the marks moves focus to the top of the list, so the cursor is put back where it was.
+        var cursor = Keyboard.FocusedElement as ListBoxItem;
+
         // One tooth at the final level, not a burst of them.
         _bulkMarking = true;
         foreach (var r in _rows.Where(r => !r.IsDetached && predicate(r))) r.IsMarked = value;
         _bulkMarking = false;
         UpdateTotals();
+        if (cursor is not null)
+        {
+            cursor.Focus();
+            Dispatcher.BeginInvoke(DispatcherPriority.Input, () => cursor.Focus());
+        }
+
         _sound.PlayRatchet(MarkedCount);
     }
 
@@ -408,10 +419,19 @@ public partial class MainWindow : Window
     {
         if (_consigning)
         {
-            if (key == Key.Escape && _consignCts is { IsCancellationRequested: false })
+            if (key == Key.Escape)
             {
-                _consignCts.Cancel();
-                StatusText.Text = "STOPPING AFTER THE CURRENT FOLDER.";
+                // The files may already be finished, with only the animation left to play.
+                _skipFalls = true;
+                if (!_purgeWorkDone && _consignCts is { IsCancellationRequested: false })
+                {
+                    _consignCts.Cancel();
+                    StatusText.Text = "STOPPING AFTER THE CURRENT FOLDER.";
+                }
+                else
+                {
+                    StatusText.Text = "SKIPPING THE ANIMATION.";
+                }
             }
 
             return true; // the ledger is locked while consigning
@@ -994,7 +1014,9 @@ public partial class MainWindow : Window
         Ledger.IsHitTestVisible = false;
         Legend.IsEnabled = false;
         _consignCts = new CancellationTokenSource();
-        StatusText.Text = options.DryRun ? "DRY RUN. NOTHING IS BEING PURGED." : "PURGING. ESC STOPS AFTER THE CURRENT FOLDER.";
+        _skipFalls = false;
+        _purgeWorkDone = false;
+        StatusText.Text = options.DryRun ? "DRY RUN. NOTHING IS BEING PURGED. ESC SKIPS THE ANIMATION." : "PURGING. ESC STOPS AFTER THE CURRENT FOLDER.";
         _sound.StartHum();
 
         var remaining = pre.Targets.GroupBy(t => t.PackageId, StringComparer.OrdinalIgnoreCase)
@@ -1010,7 +1032,8 @@ public partial class MainWindow : Window
             if (--remaining[id] > 0) return;
             var row = _rows.FirstOrDefault(r => string.Equals(r.PackageId, id, StringComparison.OrdinalIgnoreCase));
             if (row is not null) EnqueueFall(row, removedAny.Contains(id));
-            StatusText.Text = $"{(options.DryRun ? "DRY RUN. NOTHING IS BEING PURGED. " : "")}{p.Index + 1} OF {p.Total} FOLDERS PROCESSED.";
+            if (!_skipFalls)
+                StatusText.Text = $"{(options.DryRun ? "DRY RUN. NOTHING IS BEING PURGED. ESC SKIPS THE ANIMATION. " : "")}{p.Index + 1} OF {p.Total} FOLDERS PROCESSED.";
         });
 
         IReadOnlyList<ConsignResult> results;
@@ -1023,6 +1046,8 @@ public partial class MainWindow : Window
         {
             results = pre.Targets.Select(t => new ConsignResult(t, ConsignOutcome.Failed, ex.Message)).ToList();
         }
+
+        _purgeWorkDone = true;
 
         // Let queued progress callbacks run, then let the last rows finish falling.
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
@@ -1052,7 +1077,8 @@ public partial class MainWindow : Window
 
     private void ShowResults(IReadOnlyList<ConsignResult> results, bool dryRun)
     {
-        ShowSheet(dryRun ? "DRY RUN DONE" : "DONE", k =>
+        var heading = ScopeText.ResultsHeading(results, dryRun);
+        ShowSheet(heading, k =>
         {
             if (k is Key.Enter or Key.Escape)
             {
@@ -1067,7 +1093,8 @@ public partial class MainWindow : Window
         int skipped = results.Count(r => r.Outcome == ConsignOutcome.Skipped);
         int failed = results.Count(r => r.Outcome == ConsignOutcome.Failed);
 
-        Line(ScopeText.Summary(results, dryRun), size: 22);
+        var summary = ScopeText.Summary(results, dryRun);
+        if (summary.TrimEnd('.') != heading) Line(summary, size: 22);
         if (skipped + failed > 0) Line($"{skipped} SKIPPED. {failed} FAILED.", inverse: failed > 0);
         Gap();
 
@@ -1112,7 +1139,7 @@ public partial class MainWindow : Window
 
     private async Task AnimateFall(AircraftRow row, bool removed)
     {
-        if (!SystemParameters.ClientAreaAnimation || IsPlain)
+        if (_skipFalls || !SystemParameters.ClientAreaAnimation || IsPlain)
         {
             row.IsDetached = removed;
             return;

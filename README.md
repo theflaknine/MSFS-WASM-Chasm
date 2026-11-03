@@ -70,7 +70,7 @@ that file (a copy placed beside `WasmChasm.exe` overrides the built-in one).
 | `/` or Ctrl+F | Filter by name |
 | F6 / Shift+F6 | Sort by name, size or date / reverse |
 | Enter | Purge marked aircraft (a confirm screen always follows) |
-| Esc | Cancel / unmark all / stop after the current folder |
+| Esc | Cancel / unmark all / stop after the current folder / skip the falling animation |
 | F1 | Help |
 | F2 | Switch install (Steam / Store) |
 | F3 | Settings |
@@ -197,5 +197,5 @@ project.
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE). Audio mixing uses [NAudio](https://github.com/naudio/NAudio) (MIT), and settings use System.Text.Json (MIT), both bundled in the exe. The bundled VT323 font is © The VT323 Project Authors, SIL Open Font
+MIT — see [LICENSE](LICENSE). Audio mixing uses [NAudio](https://github.com/naudio/NAudio) (MIT), and settings use System.Text.Json (MIT), both bundled in the exe. See [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt), which `tools/MakeNotices.ps1` writes. The bundled VT323 font is © The VT323 Project Authors, SIL Open Font
 Licence 1.1 ([OFL.txt](src/WasmChasm.App/Fonts/OFL.txt)).

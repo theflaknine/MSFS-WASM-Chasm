@@ -64,7 +64,7 @@ Aircraft built for MSFS 2020 use an `MSFS2020` sibling folder instead of `MSFS20
 - FR-8: A confirm step asks plainly how many aircraft to purge, says what will happen, gives the warning for that scope and lists every aircraft by name and size. Full paths appear on the results screen and in the log. No silent deletes.
 - FR-9: Default action moves folders and files to the Windows Recycle Bin. Optional setting: zip a backup first, to a folder the user gives by pasting or typing its path. It can't be inside a WASM folder, and it's created if missing. Permanent delete is off by default.
 - FR-10: Three scopes. **Compiled cache only** (default) removes only the sim-generated compiled files and keeps `work`. **Work folder only** removes the `work` subfolder, for when a developer's support team asks for it. **Whole package folder** removes both. The sim rebuilds those files, so the compiled-cache default loses nothing.
-- FR-11: A results screen lists each folder as removed, skipped or failed, with the reason. In Fun mode, a clean purge skips it, since the fall into the chasm is the confirmation, and shows a one-line summary in the status bar. The screen always appears in Serious mode, for dry runs, when animations are off, and whenever anything was skipped or failed, a link was removed, or a backup was written.
+- FR-11: A results screen lists each folder as removed, skipped or failed, with the reason. Its heading only says DONE when everything went through; otherwise it says NOTHING WAS PURGED or NOT EVERYTHING WAS PURGED. In Fun mode, a clean purge skips it, since the fall into the chasm is the confirmation, and shows a one-line summary in the status bar. The screen always appears in Serious mode, for dry runs, when animations are off, and whenever anything was skipped or failed, a link was removed, or a backup was written.
 
 **Safety**
 
@@ -100,7 +100,7 @@ The app looks like an anonymous late-1970s office terminal: one phosphor colour 
 
 1. User selects rows; each gets a marker and the depth gauge climbs.
 2. ENTER opens a full-screen confirm sheet: the question, what will happen, the warning, the aircraft list, and a typed confirmation ("Y") for more than five aircraft.
-3. On confirm, each row detaches from the list, slides right, and drops into the pit, breaking into falling characters. Rows fall one at a time as each folder actually completes, so the animation reports real progress.
+3. On confirm, each row detaches from the list, slides right, and drops into the pit, breaking into falling characters. Rows fall one at a time as each folder actually completes, so the animation reports real progress. Esc skips the rest of the animation.
 4. Results screen in the same style, with any failures in inverse video.
 
 **Sound (optional, off by default)**: a gentle retro sci-fi hum while the window is active (it fades out when another window is in front, so it never plays over the sim, and swells while purging), a gradual power-up at launch that fades in from silence, a soft blip on row change, on select a soft ratchet that rises a semitone with each marked aircraft (the gauge shows size, the sound shows count), a crumble as each row breaks up, a soft chime on completion. Synthesised at runtime; no audio files ship.

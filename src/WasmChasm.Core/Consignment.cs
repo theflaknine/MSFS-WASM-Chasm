@@ -47,10 +47,25 @@ public static class ScopeText
         var purged = results.Where(r => r.Outcome is ConsignOutcome.Removed or ConsignOutcome.WouldRemove).ToList();
         int aircraft = purged.Select(r => r.Target.PackageId).Distinct(StringComparer.OrdinalIgnoreCase).Count();
         var size = ByteFormat.Megabytes(purged.Sum(r => r.Target.SizeBytes));
-        return dryRun
-            ? $"DRY RUN DONE. {aircraft} AIRCRAFT WOULD BE PURGED. {size} WOULD BE FREED."
-            : $"DONE. {aircraft} AIRCRAFT PURGED. {size} FREED.";
+        if (dryRun) return $"DRY RUN DONE. {aircraft} AIRCRAFT WOULD BE PURGED. {size} WOULD BE FREED.";
+
+        // "DONE" would read as success, so it's only said when everything went through.
+        if (!HasProblems(results)) return $"DONE. {aircraft} AIRCRAFT PURGED. {size} FREED.";
+        return aircraft == 0 ? NothingPurged + "." : $"{aircraft} AIRCRAFT PURGED. {size} FREED.";
     }
+
+    /// <summary>The results page heading, which must not claim success when something went wrong.</summary>
+    public static string ResultsHeading(IReadOnlyCollection<ConsignResult> results, bool dryRun)
+    {
+        if (dryRun) return "DRY RUN DONE";
+        if (!HasProblems(results)) return "DONE";
+        return results.Any(r => r.Outcome == ConsignOutcome.Removed) ? "NOT EVERYTHING WAS PURGED" : NothingPurged;
+    }
+
+    private const string NothingPurged = "NOTHING WAS PURGED";
+
+    private static bool HasProblems(IEnumerable<ConsignResult> results) =>
+        results.Any(r => r.Outcome is ConsignOutcome.Skipped or ConsignOutcome.Failed);
 
 }
 

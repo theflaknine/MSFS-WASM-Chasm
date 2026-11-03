@@ -16,6 +16,7 @@ dotnet run --project src/WasmChasm.App
 dotnet run --project src/WasmChasm.Cli -- scan --store store
 dotnet run --project src/WasmChasm.Cli -- purge <package-id> --store store --dry-run
 powershell -ExecutionPolicy Bypass -File tools\MakeIcon.ps1 [preview.png]
+powershell -ExecutionPolicy Bypass -File tools\MakeNotices.ps1   # after changing a package
 ```
 
 - A running `WasmChasm.exe` locks its build output, so close the app before building the solution.
