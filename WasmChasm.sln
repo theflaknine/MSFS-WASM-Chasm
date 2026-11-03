@@ -1,0 +1,50 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{EE237872-BC78-4B4C-A758-C3619730C250}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WasmChasm.Core", "src\WasmChasm.Core\WasmChasm.Core.csproj", "{E0FD2AC3-7677-43BC-9542-49579893AD2C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WasmChasm.Cli", "src\WasmChasm.Cli\WasmChasm.Cli.csproj", "{DD55F35B-D455-4FC6-BAE9-DBD0C7584879}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WasmChasm.App", "src\WasmChasm.App\WasmChasm.App.csproj", "{EEB2C222-1696-48C1-B53D-35011AF43D78}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{7123E172-25BE-4DAC-9C2C-15C40F9FD1A1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WasmChasm.Tests", "tests\WasmChasm.Tests\WasmChasm.Tests.csproj", "{C19C5DEA-92F0-48B3-8FBF-22115387F451}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E0FD2AC3-7677-43BC-9542-49579893AD2C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E0FD2AC3-7677-43BC-9542-49579893AD2C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E0FD2AC3-7677-43BC-9542-49579893AD2C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E0FD2AC3-7677-43BC-9542-49579893AD2C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DD55F35B-D455-4FC6-BAE9-DBD0C7584879}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DD55F35B-D455-4FC6-BAE9-DBD0C7584879}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DD55F35B-D455-4FC6-BAE9-DBD0C7584879}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DD55F35B-D455-4FC6-BAE9-DBD0C7584879}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EEB2C222-1696-48C1-B53D-35011AF43D78}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EEB2C222-1696-48C1-B53D-35011AF43D78}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EEB2C222-1696-48C1-B53D-35011AF43D78}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EEB2C222-1696-48C1-B53D-35011AF43D78}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C19C5DEA-92F0-48B3-8FBF-22115387F451}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C19C5DEA-92F0-48B3-8FBF-22115387F451}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C19C5DEA-92F0-48B3-8FBF-22115387F451}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C19C5DEA-92F0-48B3-8FBF-22115387F451}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{E0FD2AC3-7677-43BC-9542-49579893AD2C} = {EE237872-BC78-4B4C-A758-C3619730C250}
+		{DD55F35B-D455-4FC6-BAE9-DBD0C7584879} = {EE237872-BC78-4B4C-A758-C3619730C250}
+		{EEB2C222-1696-48C1-B53D-35011AF43D78} = {EE237872-BC78-4B4C-A758-C3619730C250}
+		{C19C5DEA-92F0-48B3-8FBF-22115387F451} = {7123E172-25BE-4DAC-9C2C-15C40F9FD1A1}
+	EndGlobalSection
+EndGlobal

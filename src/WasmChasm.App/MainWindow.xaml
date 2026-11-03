@@ -1,0 +1,312 @@
+<Window x:Class="WasmChasm.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:WasmChasm.App.Views"
+        Title="WASM Chasm"
+        Width="1100" Height="860" MinWidth="640" MinHeight="500"
+        Background="#050403"
+        WindowStartupLocation="CenterScreen"
+        UseLayoutRounding="True"
+        PreviewKeyDown="OnPreviewKeyDown">
+    <!-- The window letterboxes around a fixed 4:3 monitor. -->
+    <Viewbox Stretch="Uniform" Margin="12">
+        <Grid Width="1040" Height="800">
+            <!-- Bezel: thick, rounded, matte plastic. -->
+            <Border x:Name="Bezel" CornerRadius="46" BorderThickness="2" BorderBrush="#3A352E">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#2B2823" Offset="0" />
+                        <GradientStop Color="#1E1C18" Offset="0.55" />
+                        <GradientStop Color="#151310" Offset="1" />
+                    </LinearGradientBrush>
+                </Border.Background>
+                <Grid>
+                    <!-- Inner recess around the glass. -->
+                    <Border Margin="34,30,34,50" CornerRadius="34" Background="#0A0907" BorderBrush="#0C0B09" BorderThickness="6">
+                        <Grid x:Name="ScreenRoot" Width="952" Height="708" HorizontalAlignment="Center" VerticalAlignment="Center"
+                              Background="{DynamicResource ScreenBg}">
+                            <Grid.Clip>
+                                <RectangleGeometry Rect="0,0,952,708" RadiusX="28" RadiusY="28" />
+                            </Grid.Clip>
+
+                            <!-- Everything lit by the phosphor lives in Glow (it receives the glow effect). -->
+                            <Grid x:Name="Glow" Margin="26,18,26,14">
+                              <Grid x:Name="MainContent">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <!-- Header: app name, detected install, session clock. -->
+                                <Grid Grid.Row="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Style="{StaticResource InverseBorder}">
+                                        <TextBlock Style="{StaticResource InverseText}" Text="WASM CHASM" />
+                                    </Border>
+                                    <Button x:Name="InstallButton" Grid.Column="1" Style="{StaticResource KeyButton}" HorizontalAlignment="Center"
+                                            Click="OnSwitchInstallClick" AutomationProperties.Name="Detected install. Press F2 to switch.">
+                                        <TextBlock x:Name="InstallText" Text="INSTALL: ----" FontFamily="{StaticResource TerminalFont}" FontSize="20" />
+                                    </Button>
+                                    <TextBlock x:Name="ClockText" Grid.Column="2" Style="{StaticResource Term}" Text="SESSION 00:00:00"
+                                               AutomationProperties.Name="Session clock" />
+                                </Grid>
+
+                                <!-- Body -->
+                                <Grid Grid.Row="1" Margin="0,8,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Rectangle Grid.ColumnSpan="3" Height="1" VerticalAlignment="Top" Fill="{DynamicResource Dim}" />
+
+                                    <!-- Ledger -->
+                                    <DockPanel Grid.Column="0" Margin="0,8,0,0">
+                                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Term}" FontSize="24" Text="SELECT AIRCRAFT FOR CONSIGNMENT" />
+                                        <Grid DockPanel.Dock="Top" Margin="0,4,0,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource TermDim}" Text="FILTER&gt; " />
+                                            <TextBox x:Name="FilterBox" Grid.Column="1" Style="{StaticResource TermTextBox}"
+                                                     TextChanged="OnFilterChanged" AutomationProperties.Name="Filter aircraft by name or package ID" />
+                                            <Button Grid.Column="2" Style="{StaticResource KeyButton}" Click="OnSortClick" Margin="12,0,0,0"
+                                                    AutomationProperties.Name="Change sort order (F6)">
+                                                <TextBlock x:Name="SortText" Text="SORT: NAME ▲" FontFamily="{StaticResource TerminalFont}" FontSize="20" />
+                                            </Button>
+                                        </Grid>
+                                        <!-- Column headings -->
+                                        <Grid DockPanel.Dock="Top" Margin="0,0,12,2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="40" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="150" />
+                                                <ColumnDefinition Width="78" />
+                                                <ColumnDefinition Width="96" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="1" Style="{StaticResource TermDim}" Text="TITLE" />
+                                            <TextBlock Grid.Column="2" Style="{StaticResource TermDim}" Text="PACKAGE" />
+                                            <TextBlock x:Name="SizeHeading" Grid.Column="3" Style="{StaticResource TermDim}" Text="WORK" HorizontalAlignment="Right" Margin="0,0,10,0" />
+                                            <TextBlock Grid.Column="4" Style="{StaticResource TermDim}" Text="MODIFIED" />
+                                        </Grid>
+                                        <!-- Running total (FR-6) and status line. -->
+                                        <StackPanel DockPanel.Dock="Bottom" Margin="0,4,0,0">
+                                            <Rectangle Height="1" Fill="{DynamicResource Dim}" Margin="0,0,0,2" />
+                                            <TextBlock x:Name="TotalText" Style="{StaticResource Term}" Text="0 MARKED. 0 MB QUEUED."
+                                                       AutomationProperties.LiveSetting="Polite" />
+                                            <TextBlock x:Name="StatusText" Style="{StaticResource TermDim}" Text="" TextTrimming="CharacterEllipsis"
+                                                       AutomationProperties.LiveSetting="Polite" />
+                                        </StackPanel>
+
+                                        <Grid>
+                                            <ListBox x:Name="Ledger"
+                                                     SelectionMode="Multiple"
+                                                     Background="Transparent" BorderThickness="0" Padding="0"
+                                                     Foreground="{DynamicResource Phosphor}"
+                                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                     VirtualizingPanel.IsVirtualizing="False"
+                                                     KeyboardNavigation.TabNavigation="Once"
+                                                     AutomationProperties.Name="Aircraft ledger. Space marks an aircraft, Enter consigns marked aircraft."
+                                                     PreviewKeyDown="OnLedgerPreviewKeyDown"
+                                                     SelectionChanged="OnLedgerSelectionChanged">
+                                                <ListBox.ItemContainerStyle>
+                                                    <Style TargetType="ListBoxItem">
+                                                        <Setter Property="IsSelected" Value="{Binding IsMarked, Mode=TwoWay}" />
+                                                        <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleName}" />
+                                                        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                                        <Setter Property="Template">
+                                                            <Setter.Value>
+                                                                <ControlTemplate TargetType="ListBoxItem">
+                                                                    <Grid>
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="18" />
+                                                                            <ColumnDefinition Width="*" />
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock x:Name="Cursor" Style="{StaticResource Blink}" Text="▶" Visibility="Hidden" VerticalAlignment="Top" />
+                                                                        <Border x:Name="Bd" Grid.Column="1" Background="Transparent" Padding="2,0">
+                                                                            <ContentPresenter x:Name="Cp" TextElement.Foreground="{DynamicResource Phosphor}" />
+                                                                        </Border>
+                                                                    </Grid>
+                                                                    <ControlTemplate.Triggers>
+                                                                        <Trigger Property="IsKeyboardFocused" Value="True">
+                                                                            <Setter TargetName="Cursor" Property="Visibility" Value="Visible" />
+                                                                        </Trigger>
+                                                                        <Trigger Property="IsSelected" Value="True">
+                                                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Phosphor}" />
+                                                                            <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource ScreenBg}" />
+                                                                        </Trigger>
+                                                                        <DataTrigger Binding="{Binding IsDetached}" Value="True">
+                                                                            <Setter Property="Opacity" Value="0" />
+                                                                        </DataTrigger>
+                                                                    </ControlTemplate.Triggers>
+                                                                </ControlTemplate>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                    </Style>
+                                                </ListBox.ItemContainerStyle>
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel TextElement.FontFamily="{StaticResource TerminalFont}" TextElement.FontSize="20">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="20" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="150" />
+                                                                    <ColumnDefinition Width="78" />
+                                                                    <ColumnDefinition Width="96" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="{Binding Marker}" />
+                                                                <StackPanel Grid.Column="1" Orientation="Horizontal" ClipToBounds="True">
+                                                                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                                                                    <TextBlock Text="{Binding OrphanTag}" Opacity="0.65" Margin="8,0,0,0" />
+                                                                </StackPanel>
+                                                                <TextBlock Grid.Column="2" Text="{Binding PackageId}" Opacity="0.65" TextTrimming="CharacterEllipsis" Margin="6,0,0,0" />
+                                                                <TextBlock Grid.Column="3" Text="{Binding SizeText}" HorizontalAlignment="Right" Margin="0,0,10,0" />
+                                                                <TextBlock Grid.Column="4" Text="{Binding DateText}" />
+                                                            </Grid>
+                                                            <ItemsControl ItemsSource="{Binding SubRows}" Margin="20,0,0,0" Focusable="False">
+                                                                <ItemsControl.Style>
+                                                                    <Style TargetType="ItemsControl">
+                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding ShowSubRows}" Value="True">
+                                                                                <Setter Property="Visibility" Value="Visible" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </ItemsControl.Style>
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <TextBlock Text="{Binding Text}" Opacity="0.65" FontSize="18" TextTrimming="CharacterEllipsis" />
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+                                            <TextBlock x:Name="EmptyText" Style="{StaticResource TermDim}" Visibility="Collapsed" TextWrapping="Wrap"
+                                                       Margin="20,12,0,0" Text="NO RECORDS ON FILE." />
+                                        </Grid>
+                                    </DockPanel>
+
+                                    <!-- The chasm -->
+                                    <views:ChasmView x:Name="Chasm" Grid.Column="2" Margin="0,8,0,0" />
+                                </Grid>
+
+                                <!-- Footer: function-key legend (clickable for mouse users). -->
+                                <StackPanel Grid.Row="2">
+                                    <Rectangle Height="1" Fill="{DynamicResource Dim}" Margin="0,0,0,2" />
+                                    <WrapPanel x:Name="Legend" HorizontalAlignment="Center">
+                                        <Button Style="{StaticResource KeyButton}" Content="F1 HELP" Tag="F1" Click="OnLegendClick" />
+                                        <Button Style="{StaticResource KeyButton}" Content="F2 INSTALL" Tag="F2" Click="OnLegendClick" />
+                                        <Button Style="{StaticResource KeyButton}" Content="F3 SETTINGS" Tag="F3" Click="OnLegendClick" />
+                                        <Button Style="{StaticResource KeyButton}" Content="F5 RESCAN" Tag="F5" Click="OnLegendClick" />
+                                        <Button Style="{StaticResource KeyButton}" Content="SPACE SELECT" Tag="Space" Click="OnLegendClick" />
+                                        <Button Style="{StaticResource KeyButton}" Content="ENTER CONSIGN" Tag="Enter" Click="OnLegendClick" />
+                                        <Button Style="{StaticResource KeyButton}" Content="ESC CANCEL" Tag="Escape" Click="OnLegendClick" />
+                                    </WrapPanel>
+                                </StackPanel>
+
+                              </Grid>
+
+                                <!-- Full-screen sheet used for confirm, results, help, settings, pickers and notices.
+                                     Transparent so the glow effect doesn't halo its edges; MainContent is hidden while it shows. -->
+                                <Grid x:Name="Sheet" Background="Transparent" Visibility="Collapsed" Focusable="True" FocusVisualStyle="{x:Null}">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <StackPanel>
+                                        <Border Style="{StaticResource InverseBorder}" HorizontalAlignment="Left">
+                                            <TextBlock x:Name="SheetHeading" Style="{StaticResource InverseText}" FontSize="28" Text="" />
+                                        </Border>
+                                        <Rectangle Height="1" Fill="{DynamicResource Dim}" Margin="0,6,0,6" />
+                                    </StackPanel>
+                                    <ScrollViewer x:Name="SheetScroll" Grid.Row="1" Style="{StaticResource TermScroll}" Focusable="False">
+                                        <StackPanel x:Name="SheetBody" />
+                                    </ScrollViewer>
+                                    <StackPanel Grid.Row="2">
+                                        <Rectangle Height="1" Fill="{DynamicResource Dim}" Margin="0,6,0,4" />
+                                        <StackPanel x:Name="SheetPrompt" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Animation layer: rows sliding into the chasm and falling characters. -->
+                                <Canvas x:Name="FxLayer" IsHitTestVisible="False" ClipToBounds="True" />
+                            </Grid>
+
+                            <!-- CRT overlays (hit-test invisible). -->
+                            <Rectangle x:Name="ScanlineOverlay" IsHitTestVisible="False">
+                                <Rectangle.Fill>
+                                    <DrawingBrush TileMode="Tile" Viewport="0,0,4,3" ViewportUnits="Absolute" Viewbox="0,0,4,3" ViewboxUnits="Absolute">
+                                        <DrawingBrush.Drawing>
+                                            <DrawingGroup>
+                                                <GeometryDrawing Brush="Transparent">
+                                                    <GeometryDrawing.Geometry>
+                                                        <RectangleGeometry Rect="0,0,4,3" />
+                                                    </GeometryDrawing.Geometry>
+                                                </GeometryDrawing>
+                                                <GeometryDrawing Brush="#55000000">
+                                                    <GeometryDrawing.Geometry>
+                                                        <RectangleGeometry Rect="0,2,4,1" />
+                                                    </GeometryDrawing.Geometry>
+                                                </GeometryDrawing>
+                                            </DrawingGroup>
+                                        </DrawingBrush.Drawing>
+                                    </DrawingBrush>
+                                </Rectangle.Fill>
+                            </Rectangle>
+                            <Rectangle x:Name="RollBand" Height="120" VerticalAlignment="Top" IsHitTestVisible="False">
+                                <Rectangle.Fill>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                        <GradientStop Color="#00FFB000" Offset="0" />
+                                        <GradientStop Color="#0DFFB000" Offset="0.5" />
+                                        <GradientStop Color="#00FFB000" Offset="1" />
+                                    </LinearGradientBrush>
+                                </Rectangle.Fill>
+                                <Rectangle.RenderTransform>
+                                    <TranslateTransform x:Name="RollTransform" Y="-120" />
+                                </Rectangle.RenderTransform>
+                            </Rectangle>
+                            <Rectangle x:Name="VignetteOverlay" IsHitTestVisible="False">
+                                <Rectangle.Fill>
+                                    <RadialGradientBrush RadiusX="0.75" RadiusY="0.75">
+                                        <GradientStop Color="#00000000" Offset="0.55" />
+                                        <GradientStop Color="#A0000000" Offset="1" />
+                                    </RadialGradientBrush>
+                                </Rectangle.Fill>
+                            </Rectangle>
+                            <!-- Faint glass reflection. -->
+                            <Rectangle x:Name="GlassOverlay" IsHitTestVisible="False">
+                                <Rectangle.Fill>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="#0CFFFFFF" Offset="0" />
+                                        <GradientStop Color="#00FFFFFF" Offset="0.35" />
+                                    </LinearGradientBrush>
+                                </Rectangle.Fill>
+                            </Rectangle>
+                        </Grid>
+                    </Border>
+
+                    <!-- Bezel furniture: maker plate and power lamp. Anonymous by design. -->
+                    <TextBlock Text="DATA TERMINAL  MODEL 24" Foreground="#5C564C" FontFamily="{StaticResource TerminalFont}" FontSize="18"
+                               HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="60,0,0,16" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,60,18">
+                        <TextBlock Text="POWER" Foreground="#5C564C" FontFamily="{StaticResource TerminalFont}" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" />
+                        <Ellipse Width="10" Height="10" Fill="{DynamicResource Phosphor}" Opacity="0.85" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Viewbox>
+</Window>

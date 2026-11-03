@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>WasmChasm.Core</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Default copy embedded as a fallback; a locations.json beside the exe overrides it. -->
+    <EmbeddedResource Include="..\..\data\locations.json" LogicalName="WasmChasm.Core.locations.json" />
+    <None Include="..\..\data\locations.json" Link="locations.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="WasmChasm.Tests" />
+  </ItemGroup>
+</Project>

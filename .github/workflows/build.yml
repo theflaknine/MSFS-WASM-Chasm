@@ -1,0 +1,66 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Compile CRT pixel shader
+        shell: pwsh
+        run: |
+          $fxc = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter fxc.exe |
+                 Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $fxc) { Write-Warning "fxc.exe not found; the app will use overlay-only CRT effects."; exit 0 }
+          & $fxc.FullName /nologo /T ps_2_0 /E main /Fo src/WasmChasm.App/Shaders/crt.ps src/WasmChasm.App/Shaders/crt.fx
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test
+        run: dotnet test tests/WasmChasm.Tests -c Release --logger "console;verbosity=normal"
+
+      - name: Publish app (single-file, self-contained, x64)
+        run: dotnet publish src/WasmChasm.App -c Release -r win-x64 -o artifacts/app
+
+      - name: Publish CLI (single-file, self-contained, x64)
+        run: dotnet publish src/WasmChasm.Cli -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o artifacts/cli
+
+      - name: Package and checksum
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item artifacts/app/WasmChasm.exe release/
+          Copy-Item artifacts/cli/wasmchasm.exe release/wasmchasm-cli.exe
+          Copy-Item data/locations.json release/
+          Copy-Item LICENSE release/LICENSE.txt
+          Copy-Item src/WasmChasm.App/Fonts/OFL.txt release/
+          Get-ChildItem release -File | ForEach-Object {
+            $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$h  $($_.Name)"
+          } | Set-Content release/SHA256SUMS.txt
+          Get-Content release/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm-chasm-win-x64
+          path: release/
+
+      - name: GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          draft: true

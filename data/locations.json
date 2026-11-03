@@ -1,0 +1,31 @@
+{
+  "$comment": "All store-specific paths live here so a Sim Update path change is a data fix. Environment variables use %NAME% syntax. Paths marked verified=false still need the M0 ProcMon spike.",
+  "schemaVersion": 1,
+  "simProcessNames": [ "FlightSimulator2024" ],
+  "knownSimVersionFolders": [ "MSFS2024", "MSFS2020" ],
+  "workFolderName": "work",
+  "stores": [
+    {
+      "id": "steam",
+      "label": "STEAM",
+      "wasmRoot": "%APPDATA%\\Microsoft Flight Simulator 2024\\WASM",
+      "userCfg": "%APPDATA%\\Microsoft Flight Simulator 2024\\UserCfg.opt",
+      "verified": false
+    },
+    {
+      "id": "store",
+      "label": "STORE",
+      "wasmRoot": "%LOCALAPPDATA%\\Packages\\Microsoft.Limitless_8wekyb3d8bbwe\\LocalState\\WASM",
+      "userCfg": "%LOCALAPPDATA%\\Packages\\Microsoft.Limitless_8wekyb3d8bbwe\\LocalCache\\UserCfg.opt",
+      "verified": false
+    }
+  ],
+  "manifestSearch": [
+    "Community\\{package}",
+    "Official\\{package}",
+    "Official\\*\\{package}",
+    "Official2020\\*\\{package}",
+    "StreamedPackages\\{package}",
+    "StreamedPackages\\*\\{package}"
+  ]
+}

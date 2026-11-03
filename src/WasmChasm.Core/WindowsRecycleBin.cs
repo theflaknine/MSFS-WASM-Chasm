@@ -1,0 +1,114 @@
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Text;
+using Microsoft.Win32;
+
+namespace WasmChasm.Core;
+
+/// <summary>Recycle Bin via SHFileOperation with FOF_ALLOWUNDO. Never silently permanent-deletes.</summary>
+[SupportedOSPlatform("windows")]
+public sealed class WindowsRecycleBin : IRecycleBin
+{
+    private const int MaxShellPath = 259;
+
+    public string? WhyCannotRecycle(string path, long sizeBytes)
+    {
+        if (path.Length > MaxShellPath)
+            return "Path is too long for the Recycle Bin.";
+
+        var driveRoot = Path.GetPathRoot(path);
+        if (string.IsNullOrEmpty(driveRoot)) return "Path has no drive.";
+
+        try
+        {
+            var drive = new DriveInfo(driveRoot);
+            if (drive.DriveType != DriveType.Fixed) return "The Recycle Bin is not available on this drive.";
+        }
+        catch (ArgumentException) { return "Unknown drive."; }
+
+        var volumeKey = VolumeRegistryKey(driveRoot);
+        if (volumeKey is not null)
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(volumeKey);
+            if (key is not null)
+            {
+                if (key.GetValue("NukeOnDelete") is int nuke && nuke != 0)
+                    return "The Recycle Bin is disabled for this drive.";
+                if (key.GetValue("MaxCapacity") is int maxMb && maxMb >= 0 && sizeBytes > (long)maxMb * 1024 * 1024)
+                    return $"Folder is larger than the Recycle Bin's limit ({maxMb} MB).";
+            }
+        }
+
+        return null;
+    }
+
+    public void Recycle(string path)
+    {
+        var op = new SHFILEOPSTRUCTW
+        {
+            wFunc = FO_DELETE,
+            pFrom = path + "\0\0",
+            // FOF_WANTNUKEWARNING makes the shell ask rather than silently delete if recycling turns out impossible.
+            fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI | FOF_WANTNUKEWARNING,
+        };
+
+        int rc = SHFileOperationW(ref op);
+        if (op.fAnyOperationsAborted)
+            throw new RecycleBinUnavailableException("Recycling was declined; the folder could not go to the Recycle Bin.");
+        if (rc != 0)
+            throw new IOException($"Recycle Bin operation failed (shell error 0x{rc:X}). The folder may be in use or access was denied.");
+        if (Directory.Exists(path))
+            throw new IOException("The folder is still present after recycling; it may be in use.");
+    }
+
+    private static string? VolumeRegistryKey(string driveRoot)
+    {
+        var sb = new StringBuilder(64);
+        if (!GetVolumeNameForVolumeMountPointW(driveRoot, sb, (uint)sb.Capacity)) return null;
+        var name = sb.ToString(); // \\?\Volume{guid}\
+        int open = name.IndexOf('{');
+        int close = name.IndexOf('}');
+        if (open < 0 || close < open) return null;
+        return @"Software\Microsoft\Windows\CurrentVersion\Explorer\BitBucket\Volume\" + name.Substring(open, close - open + 1);
+    }
+
+    private const uint FO_DELETE = 0x0003;
+    private const ushort FOF_SILENT = 0x0004;
+    private const ushort FOF_NOCONFIRMATION = 0x0010;
+    private const ushort FOF_ALLOWUNDO = 0x0040;
+    private const ushort FOF_NOERRORUI = 0x0400;
+    private const ushort FOF_WANTNUKEWARNING = 0x4000;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct SHFILEOPSTRUCTW
+    {
+        public IntPtr hwnd;
+        public uint wFunc;
+        [MarshalAs(UnmanagedType.LPWStr)] public string pFrom;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? pTo;
+        public ushort fFlags;
+        [MarshalAs(UnmanagedType.Bool)] public bool fAnyOperationsAborted;
+        public IntPtr hNameMappings;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? lpszProgressTitle;
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern int SHFileOperationW(ref SHFILEOPSTRUCTW lpFileOp);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetVolumeNameForVolumeMountPointW(string mountPoint, StringBuilder volumeName, uint bufferLength);
+}
+
+/// <summary>Used off Windows: there is no Recycle Bin, so recycling is always "unavailable".</summary>
+public sealed class UnsupportedRecycleBin : IRecycleBin
+{
+    public string? WhyCannotRecycle(string path, long sizeBytes) => "No Recycle Bin on this platform.";
+    public void Recycle(string path) => throw new RecycleBinUnavailableException("No Recycle Bin on this platform.");
+}
+
+public static class RecycleBins
+{
+    public static IRecycleBin ForCurrentPlatform() =>
+        OperatingSystem.IsWindows() ? new WindowsRecycleBin() : new UnsupportedRecycleBin();
+}
