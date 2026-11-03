@@ -21,10 +21,11 @@ No installer. No telemetry. No network access. No admin rights.
 
 ## Download
 
-**There is no release yet.** The app is still being tested, and it hasn't been tried on a real Steam install.
-See [Status](#status).
+**The first releases are pre-releases.** The app hasn't been tried on a real Steam install. If you use Steam,
+please run it with dry run on first and tell me in [Issues](https://github.com/theflaknine/MSFS-WASM-Chasm/issues)
+whether it found your install. See [Status](#status).
 
-When there is a release, get it only from this repository's
+Get it only from this repository's
 [Releases page](https://github.com/theflaknine/MSFS-WASM-Chasm/releases). It's one small exe for 64-bit Windows 10
 or 11, with nothing to install. Each release includes `SHA256SUMS.txt`, so you can check your download in PowerShell:
 

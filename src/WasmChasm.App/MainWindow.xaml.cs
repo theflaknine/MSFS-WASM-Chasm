@@ -621,10 +621,13 @@ public partial class MainWindow : Window
         {
             Line(store.Label);
             Line("  " + (PathTemplate.Expand(store.WasmRoot, Environment.GetEnvironmentVariable) ?? store.WasmRoot), dim: true, size: 18);
+            if (store.UserCfg is not null)
+                Line("  " + (PathTemplate.Expand(store.UserCfg, Environment.GetEnvironmentVariable) ?? store.UserCfg), dim: true, size: 18);
         }
 
         Gap();
         Line("START THE SIMULATOR ONCE IF IT HAS NEVER RUN ON THIS PC, THEN TRY AGAIN.");
+        Line("STILL STUCK? OPEN AN ISSUE AT GITHUB.COM/THEFLAKNINE/MSFS-WASM-CHASM AND SAY WHERE YOUR FILES ARE.", dim: true);
         Prompt("F5: TRY AGAIN    ESC: QUIT");
     }
 
