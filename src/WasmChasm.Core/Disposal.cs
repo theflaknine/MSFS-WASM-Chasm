@@ -33,31 +33,31 @@ public static class SafeDelete
     {
         if (!FileSystemWalk.IsReparsePoint(path)) return false;
 
-        var dir = new DirectoryInfo(path);
-        if (dir.Exists || dir.LinkTarget is not null)
+        var reachable = PathEx.Extended(path);
+        if ((File.GetAttributes(reachable) & FileAttributes.Directory) != 0)
         {
             try
             {
                 // Non-recursive delete of a junction/symlink removes the link, never the target.
-                dir.Delete(recursive: false);
+                new DirectoryInfo(reachable).Delete(recursive: false);
                 return true;
             }
             catch (IOException)
             {
                 // Some platforms treat a directory symlink as a file.
-                File.Delete(path);
+                File.Delete(reachable);
                 return true;
             }
         }
 
-        File.Delete(path);
+        File.Delete(reachable);
         return true;
     }
 
     /// <summary>Deletes one file. If it is a link, only the link goes.</summary>
     public static void DeleteFile(string path)
     {
-        var file = new FileInfo(path);
+        var file = new FileInfo(PathEx.Extended(path));
         if (!file.Exists) return;
         if (file.IsReadOnly) file.IsReadOnly = false;
         file.Delete();
@@ -68,15 +68,10 @@ public static class SafeDelete
     {
         if (TryRemoveLinkOnly(path)) return;
 
-        var root = new DirectoryInfo(path);
+        var root = new DirectoryInfo(PathEx.Extended(path));
         if (!root.Exists) return;
 
-        foreach (var child in root.EnumerateFileSystemInfos("*", new EnumerationOptions
-                 {
-                     RecurseSubdirectories = false,
-                     AttributesToSkip = 0,
-                     IgnoreInaccessible = false,
-                 }).ToList())
+        foreach (var child in root.EnumerateFileSystemInfos("*").ToList())
         {
             if (FileSystemWalk.IsReparsePoint(child))
             {
@@ -88,9 +83,7 @@ public static class SafeDelete
             }
             else
             {
-                if ((child.Attributes & FileAttributes.ReadOnly) != 0)
-                    child.Attributes &= ~FileAttributes.ReadOnly;
-                child.Delete();
+                DeleteFile(child.FullName);
             }
         }
 
@@ -156,7 +149,7 @@ public sealed class ZipThenStrategy : IDisposalStrategy
 
     public ZipThenStrategy(string backupFolder, IDisposalStrategy then, Func<DateTime>? clock = null)
     {
-        if (!Path.IsPathFullyQualified(backupFolder))
+        if (!PathEx.IsPathFullyQualified(backupFolder))
             throw new ArgumentException("Backup folder must be a fully qualified path.", nameof(backupFolder));
         _backupFolder = backupFolder;
         _then = then;
@@ -181,7 +174,7 @@ public static class BackupZip
     public static string Create(ConsignTarget target, string backupFolder, DateTime now)
     {
         Directory.CreateDirectory(backupFolder);
-        var leaf = target.Files is not null ? "compiled" : Path.GetFileName(Path.TrimEndingDirectorySeparator(target.Path));
+        var leaf = target.Files is not null ? "compiled" : Path.GetFileName(PathEx.TrimEndingDirectorySeparator(target.Path));
         var baseName = Sanitise($"{target.PackageId}_{target.SimVersionFolder}_{leaf}_{now:yyyyMMdd-HHmmss}");
         var zipPath = Path.Combine(backupFolder, baseName + ".zip");
         for (int n = 2; File.Exists(zipPath); n++)
@@ -194,11 +187,11 @@ public static class BackupZip
             if (target.Files is not null)
             {
                 foreach (var file in target.Files)
-                    archive.CreateEntryFromFile(file, leaf + "/" + Path.GetFileName(file), CompressionLevel.Optimal);
+                    archive.CreateEntryFromFile(PathEx.Extended(file), leaf + "/" + Path.GetFileName(file), CompressionLevel.Optimal);
             }
             else
             {
-                AddDirectory(archive, new DirectoryInfo(target.Path), leaf);
+                AddDirectory(archive, new DirectoryInfo(PathEx.Extended(target.Path)), leaf);
             }
         }
         catch
@@ -213,13 +206,13 @@ public static class BackupZip
     private static void AddDirectory(ZipArchive archive, DirectoryInfo dir, string prefix)
     {
         bool any = false;
-        foreach (var child in dir.EnumerateFileSystemInfos("*", new EnumerationOptions { AttributesToSkip = 0 }))
+        foreach (var child in dir.EnumerateFileSystemInfos("*"))
         {
             any = true;
             if (FileSystemWalk.IsReparsePoint(child)) continue; // never follow links into the backup
             var name = prefix + "/" + child.Name;
-            if (child is DirectoryInfo d) AddDirectory(archive, d, name);
-            else archive.CreateEntryFromFile(child.FullName, name, CompressionLevel.Optimal);
+            if (child is DirectoryInfo) AddDirectory(archive, new DirectoryInfo(PathEx.Extended(child.FullName)), name);
+            else archive.CreateEntryFromFile(PathEx.Extended(child.FullName), name, CompressionLevel.Optimal);
         }
 
         if (!any) archive.CreateEntry(prefix + "/");

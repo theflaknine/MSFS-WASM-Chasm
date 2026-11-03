@@ -16,7 +16,7 @@ public interface IPathGuard
     GuardDecision Check(string path);
 }
 
-public sealed partial class PathGuard : IPathGuard
+public sealed class PathGuard : IPathGuard
 {
     /// <summary>Targets must sit at least this many levels below a root (simVersion\package).</summary>
     public const int MinimumDepth = 2;
@@ -30,16 +30,16 @@ public sealed partial class PathGuard : IPathGuard
         _roots = new List<string>();
         foreach (var root in roots)
         {
-            if (string.IsNullOrWhiteSpace(root) || !Path.IsPathFullyQualified(root))
+            if (string.IsNullOrWhiteSpace(root) || !PathEx.IsPathFullyQualified(root))
                 throw new ArgumentException($"Guard root must be a fully qualified path: '{root}'.");
-            _roots.Add(Path.TrimEndingDirectorySeparator(LongName(Path.GetFullPath(root))));
+            _roots.Add(PathEx.TrimEndingDirectorySeparator(LongName(Path.GetFullPath(root))));
         }
     }
 
     public IReadOnlyList<string> Roots => _roots;
 
-    [GeneratedRegex("~\\d")]
-    private static partial Regex ShortNamePattern();
+    private static readonly Regex ShortNameRegex = new("~\\d");
+    private static Regex ShortNamePattern() => ShortNameRegex;
 
     public GuardDecision Check(string path)
     {
@@ -47,7 +47,7 @@ public sealed partial class PathGuard : IPathGuard
         if (path.IndexOf('\0') >= 0) return GuardDecision.Refuse("Path contains a null character.");
         if (path.StartsWith(@"\\", StringComparison.Ordinal) || path.StartsWith("//", StringComparison.Ordinal))
             return GuardDecision.Refuse("UNC and device paths are not allowed.");
-        if (!Path.IsPathFullyQualified(path)) return GuardDecision.Refuse("Path is not fully qualified.");
+        if (!PathEx.IsPathFullyQualified(path)) return GuardDecision.Refuse("Path is not fully qualified.");
 
         var segments = path.Split(new[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries);
         foreach (var segment in segments.Skip(OperatingSystem.IsWindows() ? 1 : 0))
@@ -62,14 +62,14 @@ public sealed partial class PathGuard : IPathGuard
         }
 
         string full;
-        try { full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)); }
+        try { full = PathEx.TrimEndingDirectorySeparator(Path.GetFullPath(path)); }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
             return GuardDecision.Refuse($"Path could not be canonicalised: {ex.Message}");
         }
 
         full = LongName(full);
-        if (OperatingSystem.IsWindows() && ShortNamePattern().IsMatch(full) && !Directory.Exists(full) && !File.Exists(full))
+        if (OperatingSystem.IsWindows() && ShortNamePattern().IsMatch(full) && !Directory.Exists(PathEx.Extended(full)) && !File.Exists(PathEx.Extended(full)))
         {
             // An 8.3 name we could not expand to its long form: be conservative.
             return GuardDecision.Refuse("Unresolvable 8.3 short name.");

@@ -237,12 +237,12 @@ public sealed class ConsignmentService
         if (guarded.Files is not null)
         {
             // Anything that vanished or turned into a link since the scan is left alone.
-            var present = guarded.Files.Where(f => File.Exists(f) && !FileSystemWalk.IsReparsePoint(f)).ToList();
+            var present = guarded.Files.Where(f => File.Exists(PathEx.Extended(f)) && !FileSystemWalk.IsReparsePoint(f)).ToList();
             if (present.Count == 0)
                 return new ConsignResult(target, ConsignOutcome.Skipped, "Compiled files no longer exist.");
             guarded = guarded with { Files = present };
         }
-        else if (!Directory.Exists(path) && !isLink)
+        else if (!Directory.Exists(PathEx.Extended(path)) && !isLink)
         {
             return new ConsignResult(target, ConsignOutcome.Skipped, "Folder no longer exists.");
         }

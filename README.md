@@ -25,8 +25,8 @@ No installer. No telemetry. No network access. No admin rights.
 See [Status](#status).
 
 When there is a release, get it only from this repository's
-[Releases page](https://github.com/theflaknine/MSFS-WASM-Chasm/releases). It runs on 64-bit Windows and doesn't
-need .NET installed. Each release includes `SHA256SUMS.txt`, so you can check your download in PowerShell:
+[Releases page](https://github.com/theflaknine/MSFS-WASM-Chasm/releases). It's one small exe for 64-bit Windows 10
+or 11, with nothing to install. Each release includes `SHA256SUMS.txt`, so you can check your download in PowerShell:
 
 ```
 Get-FileHash WasmChasm.exe -Algorithm SHA256
@@ -80,7 +80,7 @@ that file (a copy placed beside `WasmChasm.exe` overrides the built-in one).
 **Fun and Serious:** the app asks which you want the first time it runs. Fun is the amber terminal. Serious is the same app with the theatre removed: plain grey, one standard font at one size, and no bezel, chasm, session clock, splash, animations or sound. It only changes how the app looks and sounds. The choice is remembered, and F4 switches at any time.
 
 **Settings (F3):** CRT effects on/off, sound on/off (Fun only, and off by default; a gentle hum, a power-up at launch, a soft blip as you move, a rising ratchet as you mark aircraft, a crumble and a chime), disposal method (Recycle Bin —
-default; zip backup then Recycle Bin; permanent delete), backup folder, scope (compiled cache only — default;
+default; zip backup then Recycle Bin; permanent delete), backup folder (paste or type its path), scope (compiled cache only — default;
 work folder only; or whole package folder) and dry run.
 
 **Dry run** shows what would be removed and touches nothing. In Fun it plays the same fall into the chasm,
@@ -116,28 +116,30 @@ manager has unlinked the aircraft or the sim streams it, the list shows the pack
 
 ### Command line
 
-`wasmchasm-cli.exe` is a thin wrapper over the same core, for support diagnostics:
+`wasmchasm.exe` is a thin wrapper over the same core, for support diagnostics. It isn't in the download; build it
+with `dotnet build src/WasmChasm.Cli`.
 
 ```
-wasmchasm-cli stores
-wasmchasm-cli scan [--store steam|store] [--root <WASM folder>] [--json]
-wasmchasm-cli purge <package-id>... [--store steam|store] [--root <WASM folder>] [--dry-run]
-                    [--scope compiled|work|package] [--include-unknown]
-                    [--mode recycle|zip|permanent] [--backup <folder>] [--yes]
+wasmchasm stores
+wasmchasm scan [--store steam|store] [--root <WASM folder>] [--json]
+wasmchasm purge <package-id>... [--store steam|store] [--root <WASM folder>] [--dry-run]
+                [--scope compiled|work|package] [--include-unknown]
+                [--mode recycle|zip|permanent] [--backup <folder>] [--yes]
 ```
 
 `purge` is always a dry run unless `--yes` is given. The default scope is `compiled`.
 
 ## Building
 
-Requires the .NET 8 SDK.
+Windows only. Requires the .NET SDK (8 or later) and the .NET Framework 4.8 developer pack. The app targets .NET
+Framework 4.8, which is built into Windows, so users have nothing to install.
 
 ```
 dotnet test tests/WasmChasm.Tests
-dotnet publish src/WasmChasm.App -c Release -r win-x64 -o artifacts/app
+dotnet publish src/WasmChasm.App -c Release -o artifacts/app
 ```
 
-The WPF app only runs on Windows; Core, CLI and tests build and run anywhere.
+`WasmChasm.exe` in the output folder holds everything it needs, including its libraries, so it runs on its own.
 
 One test uses the real Recycle Bin, so it only runs if you set `WASMCHASM_RECYCLE_TEST` to a scratch folder,
 ideally on another drive. It leaves a few small files in the bin.
@@ -168,7 +170,7 @@ docs/SPEC.md             the specification
 
 Milestone **M0 (path verification with ProcMon on real Steam and Store installs) has not been done yet.**
 The paths in `locations.json` are marked `"verified": false`. Until M0 is done, use dry run first (F3 → Dry
-run, or `wasmchasm-cli purge … --dry-run`) and check the listed folders.
+run, or `wasmchasm purge … --dry-run`) and check the listed folders.
 
 **Seen so far, on one Store install (read-only inspection, not ProcMon):** the Store WASM root and
 `UserCfg.opt` are where `locations.json` says; compiled files sit beside `work`; no `work\wasm` folder exists
@@ -195,5 +197,5 @@ project.
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE). Audio mixing uses [NAudio](https://github.com/naudio/NAudio) (MIT). The bundled VT323 font is © The VT323 Project Authors, SIL Open Font
+MIT — see [LICENSE](LICENSE). Audio mixing uses [NAudio](https://github.com/naudio/NAudio) (MIT), and settings use System.Text.Json (MIT), both bundled in the exe. The bundled VT323 font is © The VT323 Project Authors, SIL Open Font
 Licence 1.1 ([OFL.txt](src/WasmChasm.App/Fonts/OFL.txt)).

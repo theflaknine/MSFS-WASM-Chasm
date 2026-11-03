@@ -62,7 +62,7 @@ Aircraft built for MSFS 2020 use an `MSFS2020` sibling folder instead of `MSFS20
 
 - FR-7: Before acting, block if `FlightSimulator2024.exe` is running.
 - FR-8: A confirm step asks plainly how many aircraft to purge, says what will happen, gives the warning for that scope and lists every aircraft by name and size. Full paths appear on the results screen and in the log. No silent deletes.
-- FR-9: Default action moves folders and files to the Windows Recycle Bin. Optional setting: zip a backup to a user-chosen folder first. Permanent delete is off by default.
+- FR-9: Default action moves folders and files to the Windows Recycle Bin. Optional setting: zip a backup first, to a folder the user gives by pasting or typing its path. It can't be inside a WASM folder, and it's created if missing. Permanent delete is off by default.
 - FR-10: Three scopes. **Compiled cache only** (default) removes only the sim-generated compiled files and keeps `work`. **Work folder only** removes the `work` subfolder, for when a developer's support team asks for it. **Whole package folder** removes both. The sim rebuilds those files, so the compiled-cache default loses nothing.
 - FR-11: A results screen lists each folder as removed, skipped or failed, with the reason. In Fun mode, a clean purge skips it, since the fall into the chasm is the confirmation, and shows a one-line summary in the status bar. The screen always appears in Serious mode, for dry runs, when animations are off, and whenever anything was skipped or failed, a link was removed, or a backup was written.
 
@@ -80,9 +80,9 @@ The app looks like an anonymous late-1970s office terminal: one phosphor colour 
 
 **Screen and palette**
 
-- Fixed 4:3 "monitor" panel centred in the window, with a thick rounded bezel and slight barrel curvature. Window resizes letterbox around it.
+- Fixed 4:3 "monitor" panel centred in the window, with a thick rounded bezel and slight barrel curvature. Window resizes letterbox around it. The bezel's plastic looks lightly used, with faint scuffs and rubbed edges, and its power lamp is a glowing green LED, the only colour outside the screen's amber.
 - Single amber phosphor (`#FFB000`) on near-black (`#0E0B07`), with a dim amber (`#7A5400`) for secondary text. No other hues, including for warnings: emphasis comes from inverse video and blinking.
-- Subtle scanlines, faint glow on lit pixels, a slow vertical roll band. All CRT effects toggle off in settings (accessibility, and low-end GPUs).
+- Subtle scanlines, faint glow on lit pixels, a slow vertical roll band, and a very faint fixed reflection on the curved glass. All CRT effects toggle off in settings (accessibility, and low-end GPUs).
 
 **Type and copy**
 
@@ -91,7 +91,7 @@ The app looks like an anonymous late-1970s office terminal: one phosphor colour 
 
 **Layout**
 
-- Header bar: app name, detected install (STEAM or STORE), session clock.
+- Header bar: app name, detected install (STEAM or MS STORE), session clock.
 - Left two-thirds: the aircraft list, one row per aircraft (title, size, date), keyboard navigable, selected rows in inverse video.
 - Right third: the chasm, a narrow vertical pit drawn in line art receding into darkness, with a depth gauge. The gauge is linear and a full bar means all the data that could be purged, with real sizes at the ticks, so marking everything fills it.
 - Footer: function-key legend (F1 help, F5 rescan, SPACE select, ENTER purge, ESC cancel).
@@ -115,7 +115,7 @@ The app looks like an anonymous late-1970s office terminal: one phosphor colour 
 
 ## Architecture and tech stack
 
-C# on .NET 8, WPF front end, published as a self-contained single-file x64 `.exe`. WPF handles the custom CRT rendering (pixel shader effect for scanlines and curvature) without a browser runtime.
+C# on .NET Framework 4.8, WPF front end, published as one x64 `.exe` with its libraries embedded. 4.8 is built into Windows 10 and 11, so users install nothing and the download stays under 1 MB, where a self-contained .NET 8 build needed about 60 MB. WPF handles the custom CRT rendering (pixel shader effect for scanlines and curvature) without a browser runtime.
 
 **Projects**
 
@@ -123,7 +123,7 @@ C# on .NET 8, WPF front end, published as a self-contained single-file x64 `.exe
 | --- | --- |
 | `WasmChasm.Core` | Install detection, scanning, name resolution, path guard, deletion. No UI references. |
 | `WasmChasm.App` | WPF shell, CRT renderer, list and chasm views, settings. |
-| `WasmChasm.Cli` | Thin console wrapper over Core: `scan`, `purge --dry-run`. Used for M1 and support diagnostics. |
+| `WasmChasm.Cli` | Thin console wrapper over Core: `scan`, `purge --dry-run`. Used for M1, tests and support diagnostics. Not in the download. |
 | `WasmChasm.Tests` | xUnit, against fixture directory trees. |
 
 **Key interfaces in Core**
@@ -148,7 +148,7 @@ All store-specific paths live in a single `locations.json` shipped beside the co
 | File locked or access denied | Skip that folder, report it, continue. No retries with elevation. |
 | Recycle Bin disabled or over quota | Fall back to asking: zip backup first, or cancel. Never silently permanent-delete. |
 | Work folder is a junction (Addons Linker and similar) | Remove the link only, flag it in results. |
-| Path longer than 260 chars | Use long-path APIs; manifest enables `longPathAware`. |
+| Path longer than 260 chars | Every file operation uses the `\\?\` form through `PathEx.Extended`, since most PCs have Windows' long-path setting off. The path guard and logs keep the ordinary form. |
 | Unknown sibling folder (e.g. `MSFS2024_now_valid`) | Scanned and shown under its folder name; never auto-deleted. |
 
 **Testing**

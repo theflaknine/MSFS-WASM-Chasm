@@ -32,18 +32,14 @@ jobs:
       - name: Test
         run: dotnet test tests/WasmChasm.Tests -c Release --logger "console;verbosity=normal"
 
-      - name: Publish app (single-file, self-contained, x64)
-        run: dotnet publish src/WasmChasm.App -c Release -r win-x64 -o artifacts/app
-
-      - name: Publish CLI (single-file, self-contained, x64)
-        run: dotnet publish src/WasmChasm.Cli -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o artifacts/cli
+      - name: Publish app (one exe, .NET Framework 4.8, x64)
+        run: dotnet publish src/WasmChasm.App -c Release -o artifacts/app
 
       - name: Package and checksum
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force release | Out-Null
           Copy-Item artifacts/app/WasmChasm.exe release/
-          Copy-Item artifacts/cli/wasmchasm.exe release/wasmchasm-cli.exe
           Copy-Item data/locations.json release/
           Copy-Item LICENSE release/LICENSE.txt
           Copy-Item src/WasmChasm.App/Fonts/OFL.txt release/

@@ -246,8 +246,8 @@ public partial class MainWindow : Window
         var text = FilterBox.Text.Trim();
         if (text.Length == 0) return true;
         var row = (AircraftRow)o;
-        return row.Title.Contains(text, StringComparison.OrdinalIgnoreCase) ||
-               row.PackageId.Contains(text, StringComparison.OrdinalIgnoreCase);
+        return row.Title.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0 ||
+               row.PackageId.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     private void OnFilterChanged(object sender, TextChangedEventArgs e)
@@ -328,20 +328,31 @@ public partial class MainWindow : Window
     private void FocusLedger()
     {
         if (Sheet.Visibility == Visibility.Visible) return;
-        Dispatcher.BeginInvoke(DispatcherPriority.Input, () =>
-        {
-            if (Ledger.Items.Count == 0)
-            {
-                Ledger.Focus();
-                return;
-            }
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, () => FocusRowNow());
+    }
 
-            var current = Keyboard.FocusedElement as ListBoxItem;
-            if (current is not null && ReferenceEquals(ItemsControl.ItemsControlFromItemContainer(current), Ledger)) return;
-            var first = Ledger.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem;
-            if (first is not null) first.Focus();
-            else Ledger.Focus();
-        });
+    /// <summary>Puts keyboard focus on a row, and returns it. Null if there are no rows.</summary>
+    private ListBoxItem? FocusRowNow()
+    {
+        if (Ledger.Items.Count == 0)
+        {
+            Ledger.Focus();
+            return null;
+        }
+
+        if (Keyboard.FocusedElement is ListBoxItem current && ReferenceEquals(ItemsControl.ItemsControlFromItemContainer(current), Ledger))
+            return current;
+
+        // Straight after a scan the rows may not have been built yet, and with no row to focus the next key is lost.
+        Ledger.UpdateLayout();
+        if (Ledger.ItemContainerGenerator.ContainerFromIndex(0) is ListBoxItem first)
+        {
+            first.Focus();
+            return first;
+        }
+
+        Ledger.Focus();
+        return null;
     }
 
     private bool _bulkMarking;
@@ -421,6 +432,17 @@ public partial class MainWindow : Window
         bool inFilter = FilterBox.IsKeyboardFocusWithin;
         bool ctrl = (mods & ModifierKeys.Control) != 0;
         bool shift = (mods & ModifierKeys.Shift) != 0;
+
+        // If focus has been lost, a list key brings it back and still does its job.
+        if (!inFilter && key is Key.Up or Key.Down or Key.Left or Key.Right or Key.Space && Keyboard.FocusedElement is not ListBoxItem)
+        {
+            var row = FocusRowNow();
+            if (row is null) return false;
+            if (key == Key.Right) row.IsSelected = true;
+            else if (key == Key.Left) row.IsSelected = false;
+            else if (key == Key.Space) row.IsSelected = !row.IsSelected;
+            return true;
+        }
 
         switch (key)
         {
@@ -542,7 +564,7 @@ public partial class MainWindow : Window
                      ("/ OR CTRL+F", "FILTER BY NAME"),
                      ("F6 / SHIFT+F6", "CHANGE SORT: NAME, SIZE, DATE / REVERSE"),
                      ("ENTER", "PURGE MARKED AIRCRAFT (YOU CONFIRM FIRST)"),
-                     ("F2", "SWITCH INSTALL (STEAM / STORE)"),
+                     ("F2", "SWITCH INSTALL (STEAM / MS STORE)"),
                      ("F3", "SETTINGS: DISPOSAL METHOD, BACKUPS, SCOPE, DRY RUN, CRT EFFECTS, SOUND"),
                      ("F4", "SWITCH BETWEEN FUN AND SERIOUS MODE (NO EFFECTS, SAME FUNCTIONS)"),
                      ("F5", "RESCAN"),
@@ -635,7 +657,9 @@ public partial class MainWindow : Window
             {
                 case Key.Up: _settingsCursor = (_settingsCursor + count - 1) % count; _sound.PlayTick(); RenderSettings(); return true;
                 case Key.Down: _settingsCursor = (_settingsCursor + 1) % count; _sound.PlayTick(); RenderSettings(); return true;
-                case Key.Space or Key.Enter or Key.Left or Key.Right: ActivateSetting(_settingsCursor); RenderSettings(); return true;
+                case Key.Space or Key.Enter or Key.Left or Key.Right:
+                    if (ActivateSetting(_settingsCursor)) RenderSettings();
+                    return true;
                 case Key.Escape or Key.F3:
                     _settings.Save();
                     ApplyCrt();
@@ -682,7 +706,7 @@ public partial class MainWindow : Window
             0 => "SCANLINES, GLOW, CURVATURE AND THE ROLL BAND. TURN OFF FOR ACCESSIBILITY OR LOW-END GRAPHICS.",
             1 => "GENTLE HUM, GRADUAL POWER-UP, SOFT BLIP ON ROW CHANGE, RISING RATCHET ON SELECT, CRUMBLE IN THE CHASM, SOFT CHIME WHEN DONE.",
             2 => "RECYCLE BIN IS THE DEFAULT. A ZIP BACKUP IS WRITTEN TO THE BACKUP FOLDER FIRST IF CHOSEN.",
-            3 => "WHERE ZIP BACKUPS ARE WRITTEN. ENTER TO CHOOSE.",
+            3 => "WHERE ZIP BACKUPS ARE WRITTEN. ENTER TO CHANGE.",
             4 => "COMPILED CACHE ONLY IS RECOMMENDED AND KEEPS SETTINGS. WORK FOLDER AND WHOLE PACKAGE ERASE SETTINGS AND ADD-ON DATA, WHICH MAY INCLUDE LICENCE FILES.",
             _ => "SHOWS WHAT WOULD BE PURGED, FALL INTO THE CHASM INCLUDED, AND TOUCHES NOTHING.",
         };
@@ -690,7 +714,8 @@ public partial class MainWindow : Window
         Prompt("UP/DOWN MOVE.  SPACE OR ENTER CHANGES.  ESC SAVES AND RETURNS.");
     }
 
-    private void ActivateSetting(int index)
+    /// <summary>Changes one setting. Returns false if it opened another page instead, so there is nothing to redraw.</summary>
+    private bool ActivateSetting(int index)
     {
         switch (index)
         {
@@ -703,11 +728,19 @@ public partial class MainWindow : Window
                     DisposalMode.ZipThenRecycle => DisposalMode.Permanent,
                     _ => DisposalMode.RecycleBin,
                 };
-                if (next == DisposalMode.ZipThenRecycle && string.IsNullOrEmpty(_settings.BackupFolder) && ChooseBackupFolder() is null)
-                    next = DisposalMode.Permanent;
+                if (next == DisposalMode.ZipThenRecycle && string.IsNullOrEmpty(_settings.BackupFolder))
+                {
+                    ShowBackupFolderEntry(
+                        onSaved: () => { _settings.DisposalMode = DisposalMode.ZipThenRecycle; ShowSettings(); },
+                        onCancelled: () => { _settings.DisposalMode = DisposalMode.Permanent; ShowSettings(); });
+                    return false;
+                }
+
                 _settings.DisposalMode = next;
                 break;
-            case 3: ChooseBackupFolder(); break;
+            case 3:
+                ShowBackupFolderEntry(onSaved: ShowSettings, onCancelled: ShowSettings);
+                return false;
             case 4:
                 _settings.Scope = _settings.Scope switch
                 {
@@ -718,26 +751,55 @@ public partial class MainWindow : Window
                 break;
             case 5: _settings.DryRun = !_settings.DryRun; break;
         }
+
+        return true;
     }
 
-    private string? ChooseBackupFolder()
+    /// <summary>Asks for the backup folder as a pasted or typed path. A folder that doesn't exist is created now, so a bad path shows up here and not during a purge.</summary>
+    private void ShowBackupFolderEntry(Action onSaved, Action onCancelled)
     {
-        var dlg = new OpenFolderDialog { Title = "Choose a folder for WASM Chasm backups" };
-        if (!string.IsNullOrEmpty(_settings.BackupFolder) && Directory.Exists(_settings.BackupFolder))
-            dlg.InitialDirectory = _settings.BackupFolder;
-        if (dlg.ShowDialog(this) != true) return null;
+        TextBox? box = null;
+        TextBlock? problem = null;
 
-        var folder = Path.GetFullPath(dlg.FolderName);
-        // A backup inside the WASM root would be swept up by a later consignment.
-        if (_install is not null && folder.StartsWith(_install.WasmRoot, StringComparison.OrdinalIgnoreCase))
+        ShowSheet("BACKUP FOLDER", k =>
         {
-            StatusText.Text = "BACKUP FOLDER CANNOT BE INSIDE THE WASM FOLDER.";
-            return null;
-        }
+            if (k == Key.Escape) { onCancelled(); return true; }
+            if (k != Key.Enter) return false;
 
-        _settings.BackupFolder = folder;
-        _settings.Save();
-        return folder;
+            var roots = _detected.Select(d => d.WasmRoot);
+            var why = BackupFolderRule.Check(box!.Text, roots, out var folder);
+            if (why is null)
+            {
+                try { Directory.CreateDirectory(PathEx.Extended(folder!)); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+                {
+                    why = "THAT FOLDER CANNOT BE USED. CHECK THE DRIVE AND THAT YOU CAN WRITE TO IT.";
+                }
+            }
+
+            if (why is not null)
+            {
+                problem!.Text = why;
+                box.Focus();
+                return true;
+            }
+
+            _settings.BackupFolder = folder;
+            _settings.Save();
+            onSaved();
+            return true;
+        });
+
+        Line("PASTE OR TYPE THE FULL PATH OF THE FOLDER FOR ZIP BACKUPS.");
+        Line("IF THE FOLDER DOES NOT EXIST, IT WILL BE CREATED.", dim: true);
+        Gap();
+        box = new TextBox { Style = (Style)FindResource("TermTextBox"), Text = _settings.BackupFolder ?? "" };
+        AutomationPropertiesHelper.SetName(box, "Backup folder path");
+        SheetBody.Children.Add(box);
+        Gap();
+        problem = (TextBlock)Line("");
+        Prompt("ENTER: SAVE    ESC: CANCEL", blinkCursor: false);
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, () => { box.Focus(); box.SelectAll(); });
     }
 
     // ───────────────────────────── Consignment ─────────────────────────────
@@ -771,8 +833,8 @@ public partial class MainWindow : Window
         TextBox? yBox = null;
 
         string heading = targets.Count == 0 ? "NOTHING TO PURGE"
-            : _settings.DryRun ? $"DRY RUN: PURGE {aircraft.Count} AIRCRAFT?"
-            : $"PURGE {aircraft.Count} AIRCRAFT?";
+            : _settings.DryRun ? $"DRY RUN: PURGE WASM DATA FOR {aircraft.Count} AIRCRAFT?"
+            : $"PURGE WASM DATA FOR {aircraft.Count} AIRCRAFT?";
 
         ShowSheet(heading, k =>
         {
@@ -884,9 +946,12 @@ public partial class MainWindow : Window
                     if (k == Key.Escape) { CloseSheet(); return true; }
                     if (k == Key.Z)
                     {
-                        if (string.IsNullOrEmpty(_settings.BackupFolder) || !Directory.Exists(_settings.BackupFolder))
+                        if (string.IsNullOrEmpty(_settings.BackupFolder) || !Directory.Exists(PathEx.Extended(_settings.BackupFolder)))
                         {
-                            if (ChooseBackupFolder() is null) return true;
+                            ShowBackupFolderEntry(
+                                onSaved: () => _ = ExecuteAsync(service, pre, options, DisposalMode.ZipThenPermanent),
+                                onCancelled: () => RunPreflight(targets, options, mode));
+                            return true;
                         }
 
                         _ = ExecuteAsync(service, pre, options, DisposalMode.ZipThenPermanent);
@@ -1144,8 +1209,8 @@ public partial class MainWindow : Window
 
     private static Task Animate(IAnimatable target, DependencyProperty property, AnimationTimeline animation)
     {
-        var tcs = new TaskCompletionSource();
-        animation.Completed += (_, _) => tcs.TrySetResult();
+        var tcs = new TaskCompletionSource<bool>();
+        animation.Completed += (_, _) => tcs.TrySetResult(true);
         target.BeginAnimation(property, animation);
         return tcs.Task;
     }
@@ -1197,6 +1262,8 @@ public partial class MainWindow : Window
         ScreenRoot.Clip = plain ? null : _retroClip;
 
         var furniture = plain ? Visibility.Collapsed : Visibility.Visible;
+        WearLayer.Source ??= Crt.BezelWear.Create();
+        WearLayer.Visibility = furniture;
         MakerPlate.Visibility = furniture;
         ClockText.Visibility = furniture;
         PowerPanel.Visibility = furniture;

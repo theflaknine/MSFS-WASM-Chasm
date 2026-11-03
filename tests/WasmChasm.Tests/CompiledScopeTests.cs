@@ -1,5 +1,4 @@
-using System.Runtime.Versioning;
-using WasmChasm.Core;
+﻿using WasmChasm.Core;
 
 namespace WasmChasm.Tests;
 
@@ -495,7 +494,6 @@ public class JunctionAboveRootTests
         RunRealRecycle(scratch);
     }
 
-    [SupportedOSPlatform("windows")]
     private static void RunRealRecycle(string scratch)
     {
         using var f = new Fixture();

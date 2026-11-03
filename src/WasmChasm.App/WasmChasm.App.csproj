@@ -1,18 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <AssemblyName>WasmChasm</AssemblyName>
     <RootNamespace>WasmChasm.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\WasmChasm.ico</ApplicationIcon>
-    <!-- Single-file, self-contained x64 release build. -->
-    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
-    <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>true</SelfContained>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <DebugType>embedded</DebugType>
   </PropertyGroup>
   <ItemGroup>
@@ -28,6 +21,14 @@
     <!-- Compiled from Shaders\crt.fx by fxc.exe (Windows SDK); see README. Optional: the app falls back to overlay effects. -->
     <Resource Include="Shaders\crt.ps" Condition="Exists('Shaders\crt.ps')" />
     <None Include="Shaders\crt.fx" />
-    <None Include="Fonts\OFL.txt" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <None Include="Fonts\OFL.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- One exe to download: every library goes inside it. App's static constructor loads them. -->
+  <Target Name="BundleLibraries" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <EmbeddedResource Include="@(ReferenceCopyLocalPaths)" Condition="'%(ReferenceCopyLocalPaths.Extension)' == '.dll' And '%(ReferenceCopyLocalPaths.DestinationSubDirectory)' == ''">
+        <LogicalName>bundled.%(ReferenceCopyLocalPaths.Filename)%(ReferenceCopyLocalPaths.Extension)</LogicalName>
+      </EmbeddedResource>
+    </ItemGroup>
+  </Target>
 </Project>

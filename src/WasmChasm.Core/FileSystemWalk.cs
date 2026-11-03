@@ -3,35 +3,20 @@ namespace WasmChasm.Core;
 /// <summary>Directory walking that never follows reparse points (FR-13).</summary>
 public static class FileSystemWalk
 {
-    private static readonly EnumerationOptions Shallow = new()
-    {
-        RecurseSubdirectories = false,
-        IgnoreInaccessible = true,
-        AttributesToSkip = 0,
-        ReturnSpecialDirectories = false,
-    };
+    public static bool IsReparsePoint(FileSystemInfo info) => IsReparsePoint(info.FullName);
 
-    public static bool IsReparsePoint(FileSystemInfo info)
-    {
-        try
-        {
-            return (info.Exists && (info.Attributes & FileAttributes.ReparsePoint) != 0) || info.LinkTarget is not null;
-        }
-        catch (IOException) { return false; }
-        catch (UnauthorizedAccessException) { return false; }
-    }
-
+    /// <summary>Reads the item's own attributes without following it, so a broken link still counts as a link.</summary>
     public static bool IsReparsePoint(string path)
     {
-        var info = new DirectoryInfo(path);
-        if (info.Exists) return IsReparsePoint(info);
-        var file = new FileInfo(path);
-        return file.Exists && IsReparsePoint(file);
+        try { return (File.GetAttributes(PathEx.Extended(path)) & FileAttributes.ReparsePoint) != 0; }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
     }
 
     /// <summary>Total bytes and newest write time under a directory; reparse points count as zero bytes and are not entered.</summary>
     public static (long Bytes, DateTime LastWriteUtc) Measure(DirectoryInfo dir)
     {
+        dir = Reachable(dir);
         long bytes = 0;
         DateTime newest = SafeLastWrite(dir);
         if (IsReparsePoint(dir)) return (0, newest);
@@ -42,7 +27,7 @@ public static class FileSystemWalk
         {
             var current = stack.Pop();
             IEnumerable<FileSystemInfo> children;
-            try { children = current.EnumerateFileSystemInfos("*", Shallow).ToList(); }
+            try { children = Reachable(current).EnumerateFileSystemInfos("*").ToList(); }
             catch (IOException) { continue; }
             catch (UnauthorizedAccessException) { continue; }
 
@@ -66,6 +51,13 @@ public static class FileSystemWalk
         return (bytes, newest);
     }
 
+    /// <summary>The same folder, in a form the file system can reach however long its path is.</summary>
+    private static DirectoryInfo Reachable(DirectoryInfo dir)
+    {
+        var extended = PathEx.Extended(dir.FullName);
+        return ReferenceEquals(extended, dir.FullName) ? dir : new DirectoryInfo(extended);
+    }
+
     private static DateTime SafeLastWrite(FileSystemInfo info)
     {
         try { return info.LastWriteTimeUtc; }
@@ -75,14 +67,14 @@ public static class FileSystemWalk
 
     public static IEnumerable<FileInfo> Files(DirectoryInfo dir)
     {
-        try { return dir.EnumerateFiles("*", Shallow).ToList(); }
+        try { return Reachable(dir).EnumerateFiles("*").ToList(); }
         catch (IOException) { return Array.Empty<FileInfo>(); }
         catch (UnauthorizedAccessException) { return Array.Empty<FileInfo>(); }
     }
 
     public static IEnumerable<DirectoryInfo> SubDirectories(DirectoryInfo dir)
     {
-        try { return dir.EnumerateDirectories("*", Shallow).ToList(); }
+        try { return Reachable(dir).EnumerateDirectories("*").ToList(); }
         catch (IOException) { return Array.Empty<DirectoryInfo>(); }
         catch (UnauthorizedAccessException) { return Array.Empty<DirectoryInfo>(); }
     }

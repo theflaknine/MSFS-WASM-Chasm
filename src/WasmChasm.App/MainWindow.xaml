@@ -22,6 +22,12 @@
                     </LinearGradientBrush>
                 </Border.Background>
                 <Grid>
+                    <!-- Light wear on the plastic, drawn in BezelWear.cs. It sits behind the screen and outside the shader. -->
+                    <Image x:Name="WearLayer" Stretch="Fill" IsHitTestVisible="False">
+                        <Image.Clip>
+                            <RectangleGeometry Rect="0,0,1036,796" RadiusX="44" RadiusY="44" />
+                        </Image.Clip>
+                    </Image>
                     <!-- Inner recess around the glass. -->
                     <Border x:Name="ScreenFrame" Margin="34,30,34,50" CornerRadius="34" Background="#0A0907" BorderBrush="#0C0B09" BorderThickness="6">
                         <Grid x:Name="ScreenRoot" Width="952" Height="708" HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -313,14 +319,37 @@
                                 </Rectangle.Fill>
                             </Rectangle>
                             <!-- Faint glass reflection. -->
-                            <Rectangle x:Name="GlassOverlay" IsHitTestVisible="False">
-                                <Rectangle.Fill>
-                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                        <GradientStop Color="#0CFFFFFF" Offset="0" />
-                                        <GradientStop Color="#00FFFFFF" Offset="0.35" />
-                                    </LinearGradientBrush>
-                                </Rectangle.Fill>
-                            </Rectangle>
+                            <!-- Fixed fills only, so nothing crosses the screen edge, and nothing moves, so it can't distract. -->
+                            <Grid x:Name="GlassOverlay" IsHitTestVisible="False">
+                                <Rectangle>
+                                    <Rectangle.Fill>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                            <GradientStop Color="#0CFFFFFF" Offset="0" />
+                                            <GradientStop Color="#00FFFFFF" Offset="0.35" />
+                                        </LinearGradientBrush>
+                                    </Rectangle.Fill>
+                                </Rectangle>
+                                <!-- A curved sheen across the upper left, with a soft inner edge, like a window behind the viewer. -->
+                                <Rectangle>
+                                    <Rectangle.Fill>
+                                        <RadialGradientBrush Center="0.22,-0.42" GradientOrigin="0.22,-0.42" RadiusX="0.86" RadiusY="1.02">
+                                            <GradientStop Color="#00FFF4E0" Offset="0.70" />
+                                            <GradientStop Color="#0BFFF4E0" Offset="0.885" />
+                                            <GradientStop Color="#03FFF4E0" Offset="0.94" />
+                                            <GradientStop Color="#00FFF4E0" Offset="1" />
+                                        </RadialGradientBrush>
+                                    </Rectangle.Fill>
+                                </Rectangle>
+                                <!-- A fainter bounce of light low on the right, where the tube curves away. -->
+                                <Rectangle>
+                                    <Rectangle.Fill>
+                                        <RadialGradientBrush Center="0.94,1.06" GradientOrigin="0.94,1.06" RadiusX="0.42" RadiusY="0.40">
+                                            <GradientStop Color="#0BFFF4E0" Offset="0" />
+                                            <GradientStop Color="#00FFF4E0" Offset="1" />
+                                        </RadialGradientBrush>
+                                    </Rectangle.Fill>
+                                </Rectangle>
+                            </Grid>
                         </Grid>
                     </Border>
 
@@ -329,7 +358,19 @@
                                HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="60,0,0,16" />
                     <StackPanel x:Name="PowerPanel" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,60,18">
                         <TextBlock Text="POWER" Foreground="#5C564C" FontFamily="{DynamicResource TerminalFont}" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" />
-                        <Ellipse x:Name="PowerLamp" Width="10" Height="10" Fill="{DynamicResource Phosphor}" Opacity="0.85" />
+                        <!-- An LED, so it's green rather than phosphor amber. Bright in the middle, with a soft glow around it. -->
+                        <Ellipse x:Name="PowerLamp" Width="10" Height="10" Opacity="0.85">
+                            <Ellipse.Fill>
+                                <RadialGradientBrush GradientOrigin="0.42,0.38">
+                                    <GradientStop Color="#C8FFD0" Offset="0" />
+                                    <GradientStop Color="#3CE05A" Offset="0.55" />
+                                    <GradientStop Color="#1E9A38" Offset="1" />
+                                </RadialGradientBrush>
+                            </Ellipse.Fill>
+                            <Ellipse.Effect>
+                                <DropShadowEffect Color="#3CE05A" BlurRadius="16" ShadowDepth="0" Opacity="0.95" />
+                            </Ellipse.Effect>
+                        </Ellipse>
                     </StackPanel>
                 </Grid>
             </Border>

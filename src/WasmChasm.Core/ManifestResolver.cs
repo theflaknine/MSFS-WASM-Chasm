@@ -18,10 +18,10 @@ public sealed class NullManifestResolver : IManifestResolver
 }
 
 /// <summary>Reads InstalledPackagesPath from UserCfg.opt.</summary>
-public static partial class UserCfgParser
+public static class UserCfgParser
 {
-    [GeneratedRegex("^\\s*InstalledPackagesPath\\s+\"?(?<path>[^\"]+?)\"?\\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
-    private static partial Regex InstalledPackagesPathRegex();
+    private static readonly Regex PackagesPathRegex = new("^\\s*InstalledPackagesPath\\s+\"?(?<path>[^\"]+?)\"?\\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+    private static Regex InstalledPackagesPathRegex() => PackagesPathRegex;
 
     public static string? ParseInstalledPackagesPath(string userCfgContents)
     {
@@ -100,15 +100,16 @@ public sealed class ManifestResolver : IManifestResolver
                 : current.Select(d => Path.Combine(d, segment));
         }
 
-        return current.Where(Directory.Exists);
+        return current.Where(d => Directory.Exists(PathEx.Extended(d)));
     }
 
     internal static string? ReadTitle(string manifestPath)
     {
-        if (!File.Exists(manifestPath)) return null;
+        var reachable = PathEx.Extended(manifestPath);
+        if (!File.Exists(reachable)) return null;
         try
         {
-            using var stream = File.OpenRead(manifestPath);
+            using var stream = File.OpenRead(reachable);
             using var doc = JsonDocument.Parse(stream, new JsonDocumentOptions
             {
                 AllowTrailingCommas = true,

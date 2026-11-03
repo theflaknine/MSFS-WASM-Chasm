@@ -7,6 +7,36 @@ namespace WasmChasm.App;
 
 public partial class App : Application
 {
+    private static readonly Dictionary<string, System.Reflection.Assembly?> Bundled = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The app ships as one exe, so its libraries are embedded in it (see the .csproj). This runs before anything
+    /// needs them, and matches by name so that a library asking for a slightly different version still gets ours.
+    /// </summary>
+    static App()
+    {
+        AppDomain.CurrentDomain.AssemblyResolve += (_, args) =>
+        {
+            var name = new System.Reflection.AssemblyName(args.Name).Name ?? "";
+            lock (Bundled)
+            {
+                if (Bundled.TryGetValue(name, out var loaded)) return loaded;
+
+                using var stream = typeof(App).Assembly.GetManifestResourceStream($"bundled.{name}.dll");
+                System.Reflection.Assembly? assembly = null;
+                if (stream is not null)
+                {
+                    var bytes = new byte[stream.Length];
+                    stream.Read(bytes, 0, bytes.Length);
+                    assembly = System.Reflection.Assembly.Load(bytes);
+                }
+
+                Bundled[name] = assembly;
+                return assembly;
+            }
+        };
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);

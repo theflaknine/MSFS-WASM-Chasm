@@ -51,22 +51,21 @@ public sealed class Fixture : IDisposable
     /// <summary>A directory symlink where allowed, else a junction, which Windows lets any user create.</summary>
     public static void CreateDirectoryLink(string link, string target)
     {
-        try
+        foreach (var kind in new[] { "/D", "/J" })
         {
-            Directory.CreateSymbolicLink(link, target);
-        }
-        catch (IOException) when (OperatingSystem.IsWindows())
-        {
-            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{target}\"")
+            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink {kind} \"{link}\" \"{target}\"")
             {
                 CreateNoWindow = true,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
+                RedirectStandardError = true,
             };
             using var p = System.Diagnostics.Process.Start(psi)!;
             p.WaitForExit();
-            Assert.True(Directory.Exists(link), "Could not create a junction for the test.");
+            if (Directory.Exists(link)) return;
         }
+
+        Assert.Fail("Could not create a directory link for the test.");
     }
 
     public void AddManifest(string relativeDir, string package, string title)

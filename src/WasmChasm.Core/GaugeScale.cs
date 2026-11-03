@@ -9,7 +9,7 @@ public static class GaugeScale
     private const int Divisions = 4;
 
     public static double Fill(long markedBytes, long totalBytes) =>
-        totalBytes <= 0 ? 0 : Math.Clamp((double)markedBytes / totalBytes, 0, 1);
+        totalBytes <= 0 ? 0 : Math.Max(0, Math.Min(1, (double)markedBytes / totalBytes));
 
     /// <summary>Evenly spaced ticks from zero to the total. With nothing to purge there is only the zero tick.</summary>
     public static IReadOnlyList<(double Position, string Label)> Ticks(long totalBytes)

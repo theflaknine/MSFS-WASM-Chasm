@@ -78,12 +78,12 @@ public sealed class SoundBank : IDisposable
     public void PlayPowerOn() => Play(_powerOn);
 
     /// <summary>One ratchet tooth for this many marked aircraft: each one raises the pitch a step.</summary>
-    public void PlayRatchet(int markedCount) => Play(_ratchet[Math.Clamp(markedCount, 0, SoundSynth.RatchetTopCount)]);
+    public void PlayRatchet(int markedCount) => Play(_ratchet[Math.Max(0, Math.Min(SoundSynth.RatchetTopCount, markedCount))]);
 
     /// <summary>Soft blip for moving between rows. Holding an arrow key repeats fast, so it is rate-limited.</summary>
     public void PlayTick()
     {
-        long now = Environment.TickCount64;
+        long now = System.Diagnostics.Stopwatch.GetTimestamp() * 1000 / System.Diagnostics.Stopwatch.Frequency;
         if (now - _lastTick < MinTickGapMs) return;
         _lastTick = now;
         Play(_tick);

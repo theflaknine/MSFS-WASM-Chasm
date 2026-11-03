@@ -1,12 +1,11 @@
 using System.Runtime.InteropServices;
-using System.Runtime.Versioning;
 using System.Text;
 using Microsoft.Win32;
+using Microsoft.Win32.SafeHandles;
 
 namespace WasmChasm.Core;
 
 /// <summary>Recycle Bin via SHFileOperation with FOF_ALLOWUNDO. Never silently permanent-deletes.</summary>
-[SupportedOSPlatform("windows")]
 public sealed class WindowsRecycleBin : IRecycleBin
 {
     private const int MaxShellPath = 259;
@@ -47,23 +46,33 @@ public sealed class WindowsRecycleBin : IRecycleBin
     /// <summary>The drive root a path really lands on, following any links among its ancestors.</summary>
     internal static string? PhysicalDriveRoot(string path)
     {
-        var current = Path.GetPathRoot(path);
-        if (string.IsNullOrEmpty(current)) return current;
+        var namedRoot = Path.GetPathRoot(path);
+        if (string.IsNullOrEmpty(namedRoot)) return namedRoot;
 
-        var segments = path.Substring(current.Length).Split(new[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries);
-        foreach (var segment in segments)
+        // The nearest part of the path that exists decides it, since Windows resolves every link on the way there.
+        for (var current = path; !string.IsNullOrEmpty(current); current = Path.GetDirectoryName(current))
         {
-            current = Path.Combine(current, segment);
-            try
-            {
-                var target = new DirectoryInfo(current).ResolveLinkTarget(returnFinalTarget: true);
-                if (target is not null) current = target.FullName;
-            }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            var final = FinalPath(current);
+            if (final is not null) return Path.GetPathRoot(final);
         }
 
-        return Path.GetPathRoot(current);
+        return namedRoot;
+    }
+
+    /// <summary>The real location of a path after every link is followed, or null if it can't be opened.</summary>
+    private static string? FinalPath(string path)
+    {
+        var name = path.Length >= 260 && !path.StartsWith(@"\\", StringComparison.Ordinal) ? @"\\?\" + path : path;
+        using var handle = CreateFileW(name, 0, FILE_SHARE_ALL, IntPtr.Zero, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, IntPtr.Zero);
+        if (handle.IsInvalid) return null;
+
+        var sb = new StringBuilder(32768);
+        uint len = GetFinalPathNameByHandleW(handle, sb, (uint)sb.Capacity, 0);
+        if (len == 0 || len >= sb.Capacity) return null;
+
+        var result = sb.ToString();
+        if (result.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) return @"\\" + result.Substring(8);
+        return result.StartsWith(@"\\?\", StringComparison.Ordinal) ? result.Substring(4) : result;
     }
 
     public void Recycle(string path)
@@ -81,7 +90,8 @@ public sealed class WindowsRecycleBin : IRecycleBin
             throw new RecycleBinUnavailableException("Recycling was declined; the folder could not go to the Recycle Bin.");
         if (rc != 0)
             throw new IOException($"Recycle Bin operation failed (shell error 0x{rc:X}). The folder may be in use or access was denied.");
-        if (Directory.Exists(path) || File.Exists(path))
+        var check = PathEx.Extended(path);
+        if (Directory.Exists(check) || File.Exists(check))
             throw new IOException("The item is still present after recycling; it may be in use.");
     }
 
@@ -115,6 +125,16 @@ public sealed class WindowsRecycleBin : IRecycleBin
         public IntPtr hNameMappings;
         [MarshalAs(UnmanagedType.LPWStr)] public string? lpszProgressTitle;
     }
+
+    private const uint FILE_SHARE_ALL = 0x1 | 0x2 | 0x4;
+    private const uint OPEN_EXISTING = 3;
+    private const uint FILE_FLAG_BACKUP_SEMANTICS = 0x02000000;
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern SafeFileHandle CreateFileW(string name, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetFinalPathNameByHandleW(SafeFileHandle file, StringBuilder path, uint length, uint flags);
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern int SHFileOperationW(ref SHFILEOPSTRUCTW lpFileOp);

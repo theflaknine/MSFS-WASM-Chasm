@@ -15,7 +15,7 @@ public sealed class WasmScanner : IWasmScanner
     /// <summary>FR-2: every package folder under every sim-version subfolder (known or not).</summary>
     public IReadOnlyList<WasmEntry> Scan(string wasmRoot, CancellationToken cancellationToken = default)
     {
-        var root = new DirectoryInfo(wasmRoot);
+        var root = new DirectoryInfo(PathEx.Extended(wasmRoot));
         if (!root.Exists) return Array.Empty<WasmEntry>();
 
         var entries = new List<WasmEntry>();
@@ -41,7 +41,8 @@ public sealed class WasmScanner : IWasmScanner
 
     private WasmEntry ScanPackage(string simVersion, DirectoryInfo pkgDir, bool known)
     {
-        var workDir = new DirectoryInfo(Path.Combine(pkgDir.FullName, _config.WorkFolderName));
+        var workPath = Path.Combine(PathEx.Plain(pkgDir.FullName), _config.WorkFolderName);
+        var workDir = new DirectoryInfo(PathEx.Extended(workPath));
         bool pkgIsLink = FileSystemWalk.IsReparsePoint(pkgDir);
         bool hasWork = !pkgIsLink && (workDir.Exists || FileSystemWalk.IsReparsePoint(workDir.FullName));
         bool workIsLink = hasWork && FileSystemWalk.IsReparsePoint(workDir);
@@ -60,15 +61,15 @@ public sealed class WasmScanner : IWasmScanner
         return new WasmEntry(
             PackageId: pkgDir.Name,
             SimVersionFolder: simVersion,
-            PackagePath: pkgDir.FullName,
-            WorkPath: workDir.FullName,
+            PackagePath: PathEx.Plain(pkgDir.FullName),
+            WorkPath: workPath,
             HasWorkFolder: hasWork,
             SizeBytes: pkgBytes,
             WorkSizeBytes: workBytes,
             LastModifiedUtc: pkgWrite,
             IsKnownSimVersion: known,
             WorkIsReparsePoint: workIsLink || pkgIsLink,
-            CompiledFiles: compiled.Select(f => f.FullName).ToList(),
+            CompiledFiles: compiled.Select(f => PathEx.Plain(f.FullName)).ToList(),
             CompiledSizeBytes: compiled.Sum(f => f.Length));
     }
 

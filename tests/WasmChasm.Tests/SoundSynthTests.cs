@@ -42,7 +42,8 @@ public class SoundSynthTests
     public void Power_up_builds_gradually_with_no_sudden_start()
     {
         var s = SoundSynth.PowerOn();
-        double Level(double from, double to) => Rms(s[(int)(s.Length * from)..(int)(s.Length * to)]);
+        double Level(double from, double to) =>
+            Rms(s.Skip((int)(s.Length * from)).Take((int)(s.Length * to) - (int)(s.Length * from)).ToArray());
 
         // Each stretch of the opening is louder than the last, and the start is close to silent.
         Assert.True(Level(0, 0.05) < Level(0.10, 0.15));

@@ -165,7 +165,7 @@ public static class SoundSynth
     /// </summary>
     public static float[] Ratchet(int markedCount)
     {
-        int count = Math.Clamp(markedCount, 0, RatchetTopCount);
+        int count = Math.Max(0, Math.Min(RatchetTopCount, markedCount));
         double freq = 150 * Math.Pow(2, count / 12.0); // two and a half octaves at the top
         double peak = 0.10 + 0.09 * count / RatchetTopCount;
         var rng = new Random(13);

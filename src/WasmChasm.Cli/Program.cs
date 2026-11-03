@@ -75,7 +75,7 @@ public static class Program
         if (opts.Root is not null)
         {
             var full = Path.GetFullPath(opts.Root);
-            if (!Directory.Exists(full)) throw new CliException($"WASM folder not found: {full}");
+            if (!Directory.Exists(PathEx.Extended(full))) throw new CliException($"WASM folder not found: {full}");
             return InstallLocation.Custom(full);
         }
 
@@ -191,8 +191,7 @@ public static class Program
         o.WriteLine($"SCOPE: {ScopeText.Name(opts.Scope)}");
         o.WriteLine("WARNING: " + ScopeText.Warning(opts.Scope));
 
-        var mode = opts.Mode == DisposalMode.ZipThenRecycle && !OperatingSystem.IsWindows() ? DisposalMode.ZipThenPermanent : opts.Mode;
-        var strategy = dryRun ? new PermanentStrategy() : DisposalStrategies.Create(mode, recycle, opts.Backup);
+        var strategy = dryRun ? new PermanentStrategy() : DisposalStrategies.Create(opts.Mode, recycle, opts.Backup);
         var results = service.Execute(pre.Targets, strategy, options);
 
         foreach (var r in results)
