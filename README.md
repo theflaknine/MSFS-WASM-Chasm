@@ -148,8 +148,7 @@ in any of its 43 packages under the WASM root, despite some guides; there was no
 
 **Not yet tested:**
 
-- That the sim rebuilds removed compiled files cleanly, and that purging them fixes the problems users report.
-  The compiled-cache default relies on this.
+- Whether purging the compiled cache fixes the problems users report, compared with purging `work`.
 - Anything on a real Steam install, including whether `UserCfg.opt` is at the expected path. If it isn't, a
   Steam install won't be detected, and the fix is a corrected `locations.json` beside the app.
 - What `MSFS2024_now_valid` is for.

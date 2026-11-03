@@ -63,7 +63,7 @@ Aircraft built for MSFS 2020 use an `MSFS2020` sibling folder instead of `MSFS20
 - FR-7: Before acting, block if `FlightSimulator2024.exe` is running.
 - FR-8: A confirm step asks plainly how many aircraft to purge, says what will happen, gives the warning for that scope and lists every aircraft by name and size. Full paths appear on the results screen and in the log. No silent deletes.
 - FR-9: Default action moves folders and files to the Windows Recycle Bin. Optional setting: zip a backup to a user-chosen folder first. Permanent delete is off by default.
-- FR-10: Three scopes. **Compiled cache only** (default) removes only the sim-generated compiled files and keeps `work`. **Work folder only** removes the `work` subfolder, for when a developer's support team asks for it. **Whole package folder** removes both. The compiled-cache default assumes the sim rebuilds those files; this has not been tested (see M0).
+- FR-10: Three scopes. **Compiled cache only** (default) removes only the sim-generated compiled files and keeps `work`. **Work folder only** removes the `work` subfolder, for when a developer's support team asks for it. **Whole package folder** removes both. The sim rebuilds those files, so the compiled-cache default loses nothing.
 - FR-11: A results screen lists each folder as removed, skipped or failed, with the reason. In Retro, a clean purge skips it, since the fall into the chasm is the confirmation, and shows a one-line summary in the status bar. The screen always appears in Plain, for dry runs, when animations are off, and whenever anything was skipped or failed, a link was removed, or a backup was written.
 
 **Safety**
@@ -161,7 +161,7 @@ All store-specific paths live in a single `locations.json` shipped beside the co
 
 **Milestones and exit gates**
 
-1. **M0 — Path verification spike.** ProcMon on Steam and Store installs while loading a 2024-native and a 2020-format WASM aircraft. Exit: confirmed `locations.json`; the `Packages\<package>\work\wasm` and `MSFS2024_now_valid` questions answered; confirmed that the sim rebuilds removed compiled files cleanly.
+1. **M0 — Path verification spike.** ProcMon on Steam and Store installs while loading a 2024-native and a 2020-format WASM aircraft. Exit: confirmed `locations.json`; the `Packages\<package>\work\wasm` and `MSFS2024_now_valid` questions answered.
 2. **M1 — Core + CLI.** `scan` and `purge --dry-run` work on both stores. Exit: tests green; output matches manual inspection on two machines.
 3. **M2 — WPF app.** List, chasm, confirm, Recycle Bin disposal, results, CRT renderer. Exit: full manual matrix passes.
 4. **M3 — Closed test.** 5–10 testers across both stores. Exit: no data outside WASM roots touched; no open severity-1 issues.

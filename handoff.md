@@ -21,13 +21,13 @@ v0.1 is on `main` and builds. All 130 tests pass locally, plus one opt-in test a
 
 ## Before any release
 
-1. **Test that the sim rebuilds purged compiled files.** The default scope relies on this and nobody has tested it. Purge one aircraft, load it in the sim, and check that it works and new `m<hash>_0.*` files appear. Don't use the DC-6; the user ruled it out. This also needs checking: does clearing the cache fix the crashes users report?
-2. **Test on a real Steam install.** The dev machine can't. If `UserCfg.opt` isn't at the expected path, the install won't be detected, and with browsing removed the only fix is a corrected `locations.json`.
-3. **Check a CI build by eye.** Local builds have no `crt.ps`, so the shader has never been seen together with the splash, power-on, breathing title or Plain mode. Single-file publish with NAudio and the icon also hasn't been run locally.
-4. **Finish M0.** ProcMon on Steam and Store installs. `locations.json` is still marked `"verified": false`, and `MSFS2024_now_valid` remains unexplained because it doesn't exist on this machine.
+1. **Test on a real Steam install.** The dev machine can't. If `UserCfg.opt` isn't at the expected path, the install won't be detected, and with browsing removed the only fix is a corrected `locations.json`.
+2. **Check a CI build by eye.** Local builds have no `crt.ps`, so the shader has never been seen together with the splash, power-on, breathing title or Plain mode. Single-file publish with NAudio and the icon also hasn't been run locally.
+3. **Finish M0.** ProcMon on Steam and Store installs. `locations.json` is still marked `"verified": false`, and `MSFS2024_now_valid` remains unexplained because it doesn't exist on this machine.
 
 ## Not confirmed
 
+- **Whether purging the cache fixes reported crashes:** the user confirms from their own knowledge that the sim rebuilds purged compiled files, so the default scope is sound. Whether a rebuild cures the problems people report, compared with clearing `work`, hasn't been tested.
 - **Sounds:** Claude can't hear them. The user has reacted to the static, power-up and beep, but hasn't confirmed the latest hum, ratchet by count, or crumble. The hum sits around 55–220 Hz, so it may be faint on laptop speakers.
 - **Alt+F4:** the code leaves it to close the window, but it couldn't be simulated. Try it once.
 - **White flash at launch:** one capture taken as the window opened was pure white. It may be a capture artifact; the user hasn't said.
@@ -38,7 +38,7 @@ v0.1 is on `main` and builds. All 130 tests pass locally, plus one opt-in test a
 
 None of these have been fixed; the user hasn't decided on them.
 
-- **Partial purges:** a locked file stops an aircraft mid-way, so some of its compiled files may already be in the Recycle Bin when it's reported as `FAILED`. Nothing is lost, since they should rebuild. Checking for locks first would make it all-or-nothing.
+- **Partial purges:** a locked file stops an aircraft mid-way, so some of its compiled files may already be in the Recycle Bin when it's reported as `FAILED`. Nothing is lost, since the sim rebuilds them. Checking for locks first would make it all-or-nothing.
 - **Failure wording:** the results page says `DONE. 0 AIRCRAFT PURGED.` under a `DONE` heading even when everything failed.
 - **Long dry runs:** marking all 43 aircraft means a long animation, and Esc can't stop it because the work has already finished. It could speed up or skip.
 - **Esc moves the cursor:** clearing marks with Esc sends the cursor back to the top row.
