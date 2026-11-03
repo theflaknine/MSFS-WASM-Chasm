@@ -4,7 +4,7 @@ State as of 2026-11-03. Read `CLAUDE.md` first for how the project works. Check 
 
 ## Where things stand
 
-v0.1 is on `main` and builds. It moved from .NET 8 to .NET Framework 4.8 to shrink the download from 92.5 MB to 0.7 MB. All 196 tests pass locally, plus one opt-in test against the real Recycle Bin (`WASMCHASM_RECYCLE_TEST`). There is no release or tag yet.
+v0.1 is on `main` and builds. It moved from .NET 8 to .NET Framework 4.8 to shrink the download from 92.5 MB to 0.7 MB. All 196 tests pass locally, plus one opt-in test against the real Recycle Bin (`WASMCHASM_RECYCLE_TEST`). `v0.1.0-rc2` was published on 2026-11-03 as a pre-release (zip plus `SHA256SUMS.txt`, built and attested by CI). The exe from that zip was run on a fake install and worked. Nobody has run it on a Steam install or a second PC.
 
 **Built so far:**
 
@@ -19,7 +19,7 @@ v0.1 is on `main` and builds. It moved from .NET 8 to .NET Framework 4.8 to shri
 - **Results page:** Fun mode skips it after a clean purge. See `ScopeText.NeedsResultsPage`.
 - **App icon:** in the title bar and both exes.
 
-## Before any release
+## Before a full (non-pre-release) release
 
 1. **Test on a real Steam install.** The dev machine can't. If `UserCfg.opt` isn't at the expected path, the install won't be detected, and with browsing removed the only fix is a corrected `locations.json`.
 2. **Check a CI build by eye.** CI builds the 4.8 version successfully (0.72 MB artifact), but nobody has run that artifact yet. A local build with the real shader looked the same in captures, and the user tried it on a fake install. Try it on a second PC too, ideally with Windows' long-path setting off.
