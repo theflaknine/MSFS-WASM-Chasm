@@ -2,7 +2,8 @@
 
 > **Not affiliated with Microsoft, Asobo Studio or any aircraft developer.**
 >
-> **By default WASM Chasm removes only the compiled files the sim generated, and keeps the `work` folder.**
+> **By default WASM Chasm removes only the compiled files the sim generated, and keeps the `work` folder.
+> The sim rebuilds those files.**
 >
 > **Warning: purging an aircraft's `work` folder is a separate, stronger option. It erases that aircraft's
 > own settings and saved state, and anything add-on tools stored there — for example installed navdata, a
@@ -17,6 +18,21 @@ It looks like an anonymous late-1970s office terminal: amber phosphor, scanlines
 that the aircraft you purge fall into — one row at a time, as each folder actually completes.
 
 No installer. No telemetry. No network access. No admin rights.
+
+## Download
+
+**There is no release yet.** The app is still being tested, and it hasn't been tried on a real Steam install.
+See [Status](#status).
+
+When there is a release, get it only from this repository's
+[Releases page](https://github.com/theflaknine/MSFS-WASM-Chasm/releases). It runs on 64-bit Windows and doesn't
+need .NET installed. Each release includes `SHA256SUMS.txt`, so you can check your download in PowerShell:
+
+```
+Get-FileHash WasmChasm.exe -Algorithm SHA256
+```
+
+The app isn't code-signed at the moment, so Windows SmartScreen may warn you when you first run it.
 
 ## Where WASM data lives
 
@@ -63,11 +79,22 @@ that file (a copy placed beside `WasmChasm.exe` overrides the built-in one).
 
 **Retro and Plain:** Retro is the amber terminal. Plain (F4) is the same app with the theatre removed: plain grey, one standard font at one size, and no bezel, chasm, session clock, splash, animations or sound. It only changes how the app looks and sounds, and the choice is remembered.
 
-**Settings (F3):** CRT effects on/off, sound on/off (off by default; a gentle hum, a rising ratchet as you mark aircraft, a retro crumble and a chime), disposal method (Recycle Bin —
+**Settings (F3):** CRT effects on/off, sound on/off (Retro only, and off by default; a gentle hum, a power-up at launch, a soft blip as you move, a rising ratchet as you mark aircraft, a retro crumble and a chime), disposal method (Recycle Bin —
 default; zip backup then Recycle Bin; permanent delete), backup folder, scope (compiled cache only — default;
 work folder only; or whole package folder) and dry run.
 
+**Dry run** shows what would be removed and touches nothing. In Retro it plays the same fall into the chasm,
+and the rows return afterwards.
+
 More than five aircraft at once requires typing `Y` to confirm.
+
+**After a purge:** Plain always shows a results page. Retro skips it after a clean purge and shows a one-line
+summary instead, because each row falling into the chasm has already shown its folder is done. Retro still
+shows the results page after a dry run, if animations are off, if a link was removed, if a backup was written,
+and whenever anything was skipped or failed.
+
+**The gauge** beside the chasm shows how much data you have marked. A full bar means all the data that could be
+purged.
 
 Aircraft are listed by the title in their `manifest.json`. If it can't be found, for example because an add-on
 manager has unlinked the aircraft or the sim streams it, the list shows the package ID instead.
@@ -92,10 +119,11 @@ manager has unlinked the aircraft or the sim streams it, the list shows the pack
 `wasmchasm-cli.exe` is a thin wrapper over the same core, for support diagnostics:
 
 ```
-wasmchasm stores
-wasmchasm scan [--store steam|store] [--root <WASM folder>] [--json]
-wasmchasm purge <package-id>... [--dry-run] [--scope compiled|work|package] [--include-unknown]
-                [--mode recycle|zip|permanent] [--backup <folder>] [--yes]
+wasmchasm-cli stores
+wasmchasm-cli scan [--store steam|store] [--root <WASM folder>] [--json]
+wasmchasm-cli purge <package-id>... [--store steam|store] [--root <WASM folder>] [--dry-run]
+                    [--scope compiled|work|package] [--include-unknown]
+                    [--mode recycle|zip|permanent] [--backup <folder>] [--yes]
 ```
 
 `purge` is always a dry run unless `--yes` is given. The default scope is `compiled`.
@@ -140,7 +168,7 @@ docs/SPEC.md             the specification
 
 Milestone **M0 (path verification with ProcMon on real Steam and Store installs) has not been done yet.**
 The paths in `locations.json` are marked `"verified": false`. Until M0 is done, use dry run first (F3 → Dry
-run, or `wasmchasm purge … --dry-run`) and check the listed folders.
+run, or `wasmchasm-cli purge … --dry-run`) and check the listed folders.
 
 **Seen so far, on one Store install (read-only inspection, not ProcMon):** the Store WASM root and
 `UserCfg.opt` are where `locations.json` says; compiled files sit beside `work`; no `work\wasm` folder exists
@@ -152,6 +180,18 @@ in any of its 43 packages under the WASM root, despite some guides; there was no
 - Anything on a real Steam install, including whether `UserCfg.opt` is at the expected path. If it isn't, a
   Steam install won't be detected, and the fix is a corrected `locations.json` beside the app.
 - What `MSFS2024_now_valid` is for.
+
+## Contributions
+
+**This project doesn't accept pull requests or other code contributions.** The source is public so that you can
+see exactly what the app does to your files.
+
+Bug reports are welcome in [Issues](https://github.com/theflaknine/MSFS-WASM-Chasm/issues), especially from Steam
+users.
+
+The MIT licence lets you fork and change the code, but this project doesn't support copies built or changed by
+others. If you got the app from anywhere other than this repository's Releases page, it didn't come from this
+project.
 
 ## Licence
 
